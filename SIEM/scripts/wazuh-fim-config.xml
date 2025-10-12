@@ -1,0 +1,90 @@
+<!-- /var/ossec/etc/ossec.conf de cada agente -->
+<!-- File Integrity Monitoring - Caso de Uso 3 -->
+
+<syscheck>
+  <!-- Frecuencia de escaneo: cada 5 minutos -->
+  <frequency>300</frequency>
+  
+  <!-- Escaneo en tiempo real -->
+  <realtime>yes</realtime>
+  
+  <!-- Algoritmos de hash -->
+  <alert_new_files>yes</alert_new_files>
+  
+  <!-- ARCHIVOS CRÍTICOS DEL SISTEMA -->
+  
+  <!-- Archivos de usuarios y grupos -->
+  <directories check_all="yes" realtime="yes" report_changes="yes">/etc/passwd</directories>
+  <directories check_all="yes" realtime="yes" report_changes="yes">/etc/shadow</directories>
+  <directories check_all="yes" realtime="yes" report_changes="yes">/etc/group</directories>
+  <directories check_all="yes" realtime="yes" report_changes="yes">/etc/gshadow</directories>
+  
+  <!-- Sudo configuration -->
+  <directories check_all="yes" realtime="yes" report_changes="yes">/etc/sudoers</directories>
+  <directories check_all="yes" realtime="yes" report_changes="yes">/etc/sudoers.d</directories>
+  
+  <!-- SSH configuration -->
+  <directories check_all="yes" realtime="yes" report_changes="yes">/etc/ssh/sshd_config</directories>
+  <directories check_all="yes" realtime="yes" report_changes="yes">/root/.ssh</directories>
+  <directories check_all="yes" realtime="yes" report_changes="yes">/home/*/.ssh</directories>
+  
+  <!-- Firewall rules -->
+  <directories check_all="yes" realtime="yes" report_changes="yes">/etc/ufw</directories>
+  <directories check_all="yes" realtime="yes" report_changes="yes">/etc/iptables</directories>
+  
+  <!-- System boot and services -->
+  <directories check_all="yes" realtime="yes">/etc/systemd/system</directories>
+  <directories check_all="yes" realtime="yes">/etc/cron.d</directories>
+  <directories check_all="yes" realtime="yes">/etc/crontab</directories>
+  
+  <!-- APLICACIONES CRÍTICAS -->
+  
+  <!-- Wazuh -->
+  <directories check_all="yes" realtime="yes" report_changes="yes">/var/ossec/etc</directories>
+  
+  <!-- Kong API Gateway -->
+  <directories check_all="yes" realtime="yes" report_changes="yes">/etc/kong</directories>
+  
+  <!-- Keycloak -->
+  <directories check_all="yes" realtime="yes" report_changes="yes">/opt/keycloak/conf</directories>
+  
+  <!-- ModSecurity -->
+  <directories check_all="yes" realtime="yes" report_changes="yes">/etc/modsecurity</directories>
+  
+  <!-- Nginx/Apache configs -->
+  <directories check_all="yes" realtime="yes" report_changes="yes">/etc/nginx</directories>
+  
+  <!-- EXCLUSIONES (para evitar ruido) -->
+  <ignore>/etc/mtab</ignore>
+  <ignore>/etc/hosts.deny</ignore>
+  <ignore>/etc/mail/statistics</ignore>
+  <ignore>/etc/random-seed</ignore>
+  <ignore>/etc/adjtime</ignore>
+  <ignore>/etc/ld.so.cache</ignore>
+  
+  <!-- Archivos temporales y logs -->
+  <ignore type="sregex">^/var/log/</ignore>
+  <ignore type="sregex">^/tmp/</ignore>
+  <ignore type="sregex">\.log$</ignore>
+  <ignore type="sregex">\.swp$</ignore>
+  
+  <!-- Reportar cambios con diff -->
+  <nodiff>/etc/ssl/private.key</nodiff>
+  
+</syscheck>
+
+<!-- Configuración adicional -->
+<rootcheck>
+  <disabled>no</disabled>
+  <frequency>43200</frequency> <!-- 12 horas -->
+  <rootkit_files>/var/ossec/etc/shared/rootkit_files.txt</rootkit_files>
+  <rootkit_trojans>/var/ossec/etc/shared/rootkit_trojans.txt</rootkit_trojans>
+  <check_if>yes</check_if>
+  <check_dev>yes</check_dev>
+  <check_files>yes</check_files>
+  <check_pids>yes</check_pids>
+  <check_ports>yes</check_ports>
+  <check_sys>yes</check_sys>
+  <check_trojans>yes</check_trojans>
+  <check_unixaudit>yes</check_unixaudit>
+</rootcheck>
