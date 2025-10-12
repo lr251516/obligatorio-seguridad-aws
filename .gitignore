@@ -7,7 +7,7 @@ terraform.tfvars
 *.pem
 *.key
 id_rsa*
-fosil-aws-key*
+obligatorio-srd*
 
 # Terraform
 .terraform/
