@@ -1,0 +1,42 @@
+# Environment files
+*.env
+.env.*
+terraform.tfvars
+
+# SSH Keys
+*.pem
+*.key
+id_rsa*
+fosil-aws-key*
+
+# Terraform
+.terraform/
+*.tfstate*
+*.tfplan
+.terraform.lock.hcl
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+
+# AWS
+aws-access-info.txt
+
+# Virtual machines
+*.vdi
+*.vmdk
+*.iso
