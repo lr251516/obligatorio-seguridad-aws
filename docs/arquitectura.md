@@ -17,7 +17,7 @@
 - **Keycloak**: Identity Provider
 
 ### Maqueta 4: Hardening
-- **Ubuntu 22.04**: Sistema endurecido
+- **Ubuntu 22.04**: Sistema hardenizado
 - **CIS Benchmarks**: Estándares de seguridad
 - **Lynis**: Auditoría
 
