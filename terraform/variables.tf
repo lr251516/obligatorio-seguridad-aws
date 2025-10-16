@@ -19,7 +19,7 @@ variable "public_key_path" {
 variable "wazuh_instance_type" {
   description = "Instance type for Wazuh"
   type        = string
-  default     = "t3.small"
+  default     = "m7i-flex.large"
 }
 
 variable "github_repo" {

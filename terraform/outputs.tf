@@ -33,3 +33,29 @@ output "ssh_commands" {
     waf       = "ssh -i ~/.ssh/obligatorio-srd ubuntu@${aws_eip.waf.public_ip}"
   }
 }
+
+output "architecture_summary" {
+  value = <<-EOT
+  
+  ================================================
+  ARQUITECTURA DESPLEGADA
+  ================================================
+  
+  VM1: WAF/Kong        - 10.0.1.10 - t3.micro (1GB)   - GRATIS
+  VM2: Wazuh SIEM      - 10.0.1.20 - m7i-flex.large (8GB) - ~$0.15/hora
+  VM3: VPN/IAM         - 10.0.1.30 - t3.small (2GB)   - ~$0.02/hora
+  VM4: Hardening       - 10.0.1.40 - t3.micro (1GB)   - GRATIS
+  
+  Costo combinado: ~$0.17/hora cuando están corriendo
+  
+  Proyecto completo (160 horas):
+    - Wazuh: $24.00
+    - VPN/IAM: $3.32
+    - Total: $27.32
+  
+  Tus créditos: $118.13
+  Restante después del proyecto: $90.81
+  
+  ================================================
+  EOT
+}

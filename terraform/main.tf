@@ -329,7 +329,7 @@ resource "aws_instance" "wazuh" {
   private_ip = "10.0.1.20"
 
   root_block_device {
-    volume_size = 30
+    volume_size = 40
     volume_type = "gp3"
   }
 
@@ -344,7 +344,7 @@ resource "aws_instance" "wazuh" {
 # EC2 Instance - VPN/IAM
 resource "aws_instance" "vpn" {
   ami           = data.aws_ami.ubuntu.id
-  instance_type = "t3.micro"
+  instance_type = "t3.small"
   key_name      = aws_key_pair.deployer.key_name
   subnet_id     = aws_subnet.public.id
 
@@ -353,7 +353,7 @@ resource "aws_instance" "vpn" {
   private_ip = "10.0.1.30"
 
   root_block_device {
-    volume_size = 20
+    volume_size = 25
     volume_type = "gp3"
   }
 
