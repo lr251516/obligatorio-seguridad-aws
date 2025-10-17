@@ -111,13 +111,13 @@ Monitorea cambios en archivos críticos del sistema.
 
 ## 🔧 Orden de Configuración
 
-1. Desplegar infraestructura (Terraform)
+1. Desplegar infraestructura (Terraform) - **Los agentes Wazuh se instalan automáticamente via user-data**
 2. Configurar Wazuh SIEM (hub central) → [SIEM/README.md](SIEM/README.md)
-3. Configurar Keycloak + WireGuard VPN → [VPN-IAM/README.md](VPN-IAM/README.md)
-4. Configurar Kong/WAF → [WAF/README.md](WAF/README.md)
-5. Aplicar Hardening + SCA → [Hardening/README.md](Hardening/README.md)
-6. Instalar agentes Wazuh en todas las VMs
-7. Testing de casos de uso
+3. Verificar agentes Wazuh conectados (hardening-vm, waf-kong, vpn-iam)
+4. Configurar Keycloak + WireGuard VPN → [VPN-IAM/README.md](VPN-IAM/README.md)
+5. Configurar Kong/WAF → [WAF/README.md](WAF/README.md)
+6. Aplicar Hardening + SCA → [Hardening/README.md](Hardening/README.md)
+7. Testing de casos de uso → [docs/deployment-guide.md](docs/deployment-guide.md)
 
 ## 🛡️ Estándares Implementados
 

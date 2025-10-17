@@ -40,3 +40,6 @@ aws-access-info.txt
 *.vdi
 *.vmdk
 *.iso
+CAMBIOS-DEPLOYMENT.md
+terraform/aws-deployment-info.txt
+terraform/aws-deployment-info.txt
