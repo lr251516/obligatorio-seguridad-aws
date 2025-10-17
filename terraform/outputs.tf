@@ -31,31 +31,27 @@ output "ssh_commands" {
     wazuh     = "ssh -i ~/.ssh/obligatorio-srd ubuntu@${aws_eip.wazuh.public_ip}"
     vpn       = "ssh -i ~/.ssh/obligatorio-srd ubuntu@${aws_eip.vpn.public_ip}"
     waf       = "ssh -i ~/.ssh/obligatorio-srd ubuntu@${aws_eip.waf.public_ip}"
+    hardening = "ssh -i ~/.ssh/obligatorio-srd ubuntu@10.0.1.40  # Via VPN"
   }
 }
 
-output "architecture_summary" {
+output "infrastructure_summary" {
   value = <<-EOT
-  
+
   ================================================
-  ARQUITECTURA DESPLEGADA
+  INFRAESTRUCTURA DESPLEGADA
   ================================================
-  
-  VM1: WAF/Kong        - 10.0.1.10 - t3.micro (1GB)   - GRATIS
-  VM2: Wazuh SIEM      - 10.0.1.20 - m7i-flex.large (8GB) - ~$0.15/hora
-  VM3: VPN/IAM         - 10.0.1.30 - t3.small (2GB)   - ~$0.02/hora
-  VM4: Hardening       - 10.0.1.40 - t3.micro (1GB)   - GRATIS
-  
-  Costo combinado: ~$0.17/hora cuando están corriendo
-  
-  Proyecto completo (160 horas):
-    - Wazuh: $24.00
-    - VPN/IAM: $3.32
-    - Total: $27.32
-  
-  Tus créditos: $118.13
-  Restante después del proyecto: $90.81
-  
+
+  WAF/Kong:     ${aws_eip.waf.public_ip}    (10.0.1.10 - t3.micro)
+  Wazuh SIEM:   ${aws_eip.wazuh.public_ip}  (10.0.1.20 - m7i-flex.large 8GB)
+  VPN/IAM:      ${aws_eip.vpn.public_ip}    (10.0.1.30 - t3.small)
+  Hardening:    10.0.1.40                    (t3.micro - acceso via VPN)
+
+  URLs:
+    - Wazuh:    https://${aws_eip.wazuh.public_ip}
+    - Keycloak: http://${aws_eip.vpn.public_ip}:8080
+    - Kong:     http://${aws_eip.waf.public_ip}:8000
+
   ================================================
   EOT
 }

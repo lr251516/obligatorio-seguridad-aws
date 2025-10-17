@@ -1,21 +1,12 @@
 #!/bin/bash
-# Instalar agente Wazuh en las VMs 1, 3 y 4
-
+# Instalar agente Wazuh
 WAZUH_MANAGER="10.0.1.20"
 AGENT_NAME=$1
-AGENT_GROUP=$2
+AGENT_GROUP=${2:-default}
 
-if [ -z "$AGENT_NAME" ]; then
-    echo "Uso: $0 <nombre-agente> [grupo]"
-    echo "Ejemplo: $0 vm-waf waf"
-    exit 1
-fi
+[ -z "$AGENT_NAME" ] && { echo "Uso: $0 <nombre-agente> [grupo]"; exit 1; }
 
-if [ -z "$AGENT_GROUP" ]; then
-    AGENT_GROUP="default"
-fi
-
-echo "[+] Instalando agente Wazuh para $AGENT_NAME"
+echo "Instalando agente Wazuh: $AGENT_NAME"
 
 curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | sudo apt-key add -
 echo "deb https://packages.wazuh.com/4.x/apt/ stable main" | sudo tee /etc/apt/sources.list.d/wazuh.list

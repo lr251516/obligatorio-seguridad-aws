@@ -1,22 +1,13 @@
 #!/bin/bash
-# Script de hardening CIS Benchmark Level 1 para Ubuntu 22.04
-# Ejecutar ANTES de instalar el agente Wazuh para ver mejora en score
-
+# CIS Hardening Level 1 - Ubuntu 22.04
 set -e
 
-if [ "$EUID" -ne 0 ]; then 
-    echo "Ejecutar como root: sudo $0"
-    exit 1
-fi
+[ "$EUID" -ne 0 ] && { echo "Ejecutar como root"; exit 1; }
 
-echo "================================================"
-echo "  CIS Hardening Ubuntu 22.04 - Level 1"
-echo "  Para Fósil Energías Renovables"
-echo "================================================"
-echo ""
+echo "CIS Hardening Ubuntu 22.04 - Level 1"
 
 # 1. FILESYSTEM HARDENING
-echo "[1/8] Hardening del filesystem..."
+echo "[1/8] Filesystem..."
 
 # Deshabilitar filesystems no usados
 cat >> /etc/modprobe.d/cis-hardening.conf <<EOF
@@ -51,14 +42,12 @@ systemctl enable tmp.mount
 systemctl start tmp.mount
 
 # 2. BOOT LOADER HARDENING
-echo "[2/8] Hardening del bootloader..."
-
-# Configurar permisos de GRUB
+echo "[2/8] Bootloader..."
 chown root:root /boot/grub/grub.cfg
 chmod og-rwx /boot/grub/grub.cfg
 
-# 3. PROCESO Y KERNEL HARDENING
-echo "[3/8] Hardening del kernel..."
+# 3. KERNEL HARDENING
+echo "[3/8] Kernel..."
 
 cat > /etc/sysctl.d/99-cis-hardening.conf <<EOF
 # Protección de red
@@ -91,10 +80,8 @@ EOF
 
 sysctl -p /etc/sysctl.d/99-cis-hardening.conf
 
-# 4. LOGGING Y AUDITING
-echo "[4/8] Configurando auditoría..."
-
-# Configurar auditd
+# 4. AUDITING
+echo "[4/8] Auditd..."
 cat > /etc/audit/rules.d/cis-hardening.rules <<'EOF'
 # Borrar reglas existentes
 -D
@@ -149,9 +136,7 @@ EOF
 service auditd restart
 
 # 5. ACCESS CONTROL
-echo "[5/8] Configurando control de acceso..."
-
-# Configurar permisos de archivos críticos
+echo "[5/8] Access control..."
 chmod 644 /etc/passwd
 chmod 600 /etc/shadow
 chmod 644 /etc/group
@@ -175,10 +160,8 @@ auth required pam_faillock.so preauth silent audit deny=5 unlock_time=900
 auth [default=die] pam_faillock.so authfail audit deny=5 unlock_time=900
 EOF
 
-# 6. USER ACCOUNTS Y ENVIRONMENT
-echo "[6/8] Configurando cuentas de usuario..."
-
-# Configurar timeout de sesión inactiva
+# 6. USER ACCOUNTS
+echo "[6/8] User accounts..."
 echo "readonly TMOUT=900" >> /etc/profile.d/tmout.sh
 echo "readonly HISTSIZE=5000" >> /etc/profile.d/history.sh
 chmod +x /etc/profile.d/tmout.sh
@@ -195,8 +178,7 @@ for user in games news uucp proxy www-data backup list irc gnats; do
 done
 
 # 7. SSH HARDENING
-echo "[7/8] Hardening de SSH..."
-
+echo "[7/8] SSH..."
 cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup
 
 cat > /etc/ssh/sshd_config.d/99-cis-hardening.conf <<EOF
@@ -233,10 +215,8 @@ EOF
 
 systemctl restart sshd
 
-# 8. SERVICIOS Y PROCESOS
-echo "[8/8] Hardening de servicios..."
-
-# Remover servicios no necesarios
+# 8. SERVICES
+echo "[8/8] Services..."
 apt-get remove -y avahi-daemon cups isc-dhcp-server isc-dhcp-server6 \
     ldap-utils rpcbind rsync slapd snmp nis 2>/dev/null || true
 
@@ -255,25 +235,5 @@ EOF
 systemctl enable unattended-upgrades
 systemctl start unattended-upgrades
 
-echo ""
-echo "================================================"
-echo "  ✅ HARDENING COMPLETADO"
-echo "================================================"
-echo ""
-echo "Cambios aplicados (CIS Level 1):"
-echo "  ✓ Filesystem hardening"
-echo "  ✓ Bootloader protegido"
-echo "  ✓ Kernel hardening"
-echo "  ✓ Auditoría configurada"
-echo "  ✓ Control de acceso"
-echo "  ✓ SSH hardening"
-echo "  ✓ Servicios innecesarios removidos"
-echo "  ✓ Actualizaciones automáticas"
-echo ""
-echo "Siguiente paso:"
-echo "  1. Reiniciar el sistema: sudo reboot"
-echo "  2. Instalar agente Wazuh con SCA"
-echo "  3. Verificar score en Dashboard Wazuh"
-echo ""
-echo "Score esperado después de hardening: 80-85%"
-echo ""
+echo "✅ Hardening completado. Reiniciar: sudo reboot"
+echo "Score SCA esperado: 80-85%"
