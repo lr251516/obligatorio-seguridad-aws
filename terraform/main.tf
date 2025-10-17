@@ -249,13 +249,22 @@ resource "aws_security_group" "hardening" {
   description = "Security group for Hardening VM"
   vpc_id      = aws_vpc.main.id
 
-  # SSH (solo desde VPN)
+  # SSH desde mi IP (para testing)
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.my_ip]
+    description = "SSH from my IP for testing"
+  }
+
+  # SSH desde VPN
   ingress {
     from_port       = 22
     to_port         = 22
     protocol        = "tcp"
     security_groups = [aws_security_group.vpn.id]
-    description     = "SSH from VPN only"
+    description     = "SSH from VPN"
   }
 
   # WireGuard

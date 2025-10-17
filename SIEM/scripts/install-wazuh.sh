@@ -1,93 +1,56 @@
 #!/bin/bash
-# Instalación de Wazuh Manager, Indexer y Dashboard en VM2 (10.0.1.20)
+# Instalación de Wazuh All-in-One usando instalador asistido oficial
+# Versión: 4.13.1
+# Para: Ubuntu 22.04
 
 set -e
 
-echo "[+] Iniciando instalación de Wazuh Stack"
+echo "=== Instalación de Wazuh SIEM All-in-One ==="
+echo ""
 
-echo "[+] Verificando recursos..."
-MEM_TOTAL=$(free -g | awk '/^Mem:/{print $2}')
-if [ $MEM_TOTAL -lt 4 ]; then
-    echo "[!] ADVERTENCIA: Se recomiendan al menos 4GB RAM"
+# Verificar que se ejecuta como root o con sudo
+if [ "$EUID" -ne 0 ]; then
+   echo "Error: Ejecutar como root o con sudo"
+   exit 1
 fi
 
-sudo apt install -y curl apt-transport-https lsb-release gnupg
+# Verificar memoria disponible
+MEM_TOTAL=$(free -g | awk '/^Mem:/{print $2}')
+if [ "$MEM_TOTAL" -lt 6 ]; then
+    echo "⚠️  ADVERTENCIA: Se recomiendan al menos 8GB RAM"
+    echo "   Memoria disponible: ${MEM_TOTAL}GB"
+fi
 
-curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | sudo apt-key add -
-echo "deb https://packages.wazuh.com/4.x/apt/ stable main" | sudo tee /etc/apt/sources.list.d/wazuh.list
-sudo apt update
+# Descargar instalador oficial
+echo "[1/3] Descargando instalador oficial de Wazuh..."
+cd /tmp
+curl -sO https://packages.wazuh.com/4.13/wazuh-install.sh
 
-echo "[+] Instalando Wazuh Indexer..."
-sudo apt install -y wazuh-indexer
+# Ejecutar instalación all-in-one
+echo "[2/3] Ejecutando instalación (puede tardar 5-10 minutos)..."
+echo "       Instalando: Manager + Indexer + Dashboard"
+bash wazuh-install.sh -a 2>&1 | tee wazuh-installation.log
 
-sudo tee /etc/wazuh-indexer/opensearch.yml > /dev/null <<EOF
-network.host: "10.0.1.20"
-node.name: "node-1"
-cluster.name: "wazuh-cluster"
-cluster.initial_master_nodes:
-  - "node-1"
-plugins.security.disabled: false
-EOF
-
-sudo /usr/share/wazuh-indexer/bin/indexer-security-init.sh
-
-sudo systemctl daemon-reload
-sudo systemctl enable wazuh-indexer
-sudo systemctl start wazuh-indexer
-
-echo "[+] Esperando a que Indexer esté listo..."
-sleep 30
-
-echo "[+] Instalando Wazuh Manager..."
-sudo apt install -y wazuh-manager
-
-sudo sed -i 's/<connection>secure<\/connection>/<connection>secure<\/connection>\n    <port>1514<\/port>\n    <protocol>tcp<\/protocol>/' /var/ossec/etc/ossec.conf
-
-sudo systemctl enable wazuh-manager
-sudo systemctl start wazuh-manager
-
-echo "[+] Instalando Filebeat..."
-sudo apt install -y filebeat
-
-sudo tee /etc/filebeat/filebeat.yml > /dev/null <<EOF
-output.elasticsearch:
-  hosts: ["10.0.1.20:9200"]
-  protocol: https
-  username: admin
-  password: admin
-  ssl.verification_mode: none
-
-setup.template.json.enabled: true
-setup.template.json.path: '/etc/filebeat/wazuh-template.json'
-setup.template.json.name: 'wazuh'
-EOF
-
-sudo systemctl enable filebeat
-sudo systemctl start filebeat
-
-echo "[+] Instalando Wazuh Dashboard..."
-sudo apt install -y wazuh-dashboard
-
-sudo tee /etc/wazuh-dashboard/opensearch_dashboards.yml > /dev/null <<EOF
-server.host: "10.0.1.20"
-server.port: 443
-opensearch.hosts: ["https://10.0.1.20:9200"]
-opensearch.ssl.verificationMode: none
-opensearch.username: admin
-opensearch.password: admin
-EOF
-
-sudo systemctl enable wazuh-dashboard
-sudo systemctl start wazuh-dashboard
-
-echo "[✓] Instalación completada"
+# Extraer credenciales
 echo ""
-echo "=== Información de Acceso ==="
-echo "Dashboard: https://10.0.1.20"
+echo "[3/3] Extrayendo credenciales..."
+PASSWORD=$(grep "Password:" wazuh-installation.log | tail -1 | awk '{print $2}')
+
+echo ""
+echo "================================================"
+echo "  ✅ INSTALACIÓN COMPLETADA"
+echo "================================================"
+echo ""
+echo "Dashboard URL: https://$(hostname -I | awk '{print $1}')"
 echo "Usuario: admin"
-echo "Password: admin"
-echo "Manager IP: 10.0.1.20"
-echo "Manager Port: 1514"
+echo "Password: $PASSWORD"
 echo ""
-echo "[+] Para registrar agentes, usar esta clave:"
-sudo cat /var/ossec/etc/authd.pass
+echo "Credenciales guardadas en: /tmp/wazuh-credentials.txt"
+echo "$PASSWORD" > /tmp/wazuh-credentials.txt
+chmod 600 /tmp/wazuh-credentials.txt
+
+echo ""
+echo "Siguiente paso: Configurar reglas personalizadas"
+echo "  1. Copiar wazuh-custom-rules.xml a /var/ossec/etc/rules/local_rules.xml"
+echo "  2. Reiniciar: systemctl restart wazuh-manager"
+echo ""

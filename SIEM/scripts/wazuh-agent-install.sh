@@ -43,16 +43,32 @@ sudo tee /var/ossec/etc/ossec.conf > /dev/null <<EOF
     <log_format>plain</log_format>
   </logging>
 
-  <!-- File integrity monitoring - Ver wazuh_fim_config artifact -->
+  <!-- File Integrity Monitoring (FIM) -->
   <syscheck>
     <disabled>no</disabled>
     <frequency>300</frequency>
     <alert_new_files>yes</alert_new_files>
-    
-    <directories check_all="yes" realtime="yes">/etc/passwd</directories>
-    <directories check_all="yes" realtime="yes">/etc/shadow</directories>
-    <directories check_all="yes" realtime="yes">/etc/sudoers</directories>
-    <directories check_all="yes" realtime="yes">/etc/ssh/sshd_config</directories>
+
+    <!-- Archivos críticos del sistema -->
+    <directories check_all="yes" realtime="yes" report_changes="yes">/etc/passwd</directories>
+    <directories check_all="yes" realtime="yes" report_changes="yes">/etc/shadow</directories>
+    <directories check_all="yes" realtime="yes" report_changes="yes">/etc/group</directories>
+
+    <!-- Sudo configuration -->
+    <directories check_all="yes" realtime="yes" report_changes="yes">/etc/sudoers</directories>
+    <directories check_all="yes" realtime="yes" report_changes="yes">/etc/sudoers.d</directories>
+
+    <!-- SSH configuration -->
+    <directories check_all="yes" realtime="yes" report_changes="yes">/etc/ssh/sshd_config</directories>
+    <directories check_all="yes" realtime="yes" report_changes="yes">/root/.ssh</directories>
+
+    <!-- Firewall -->
+    <directories check_all="yes" realtime="yes" report_changes="yes">/etc/ufw</directories>
+
+    <!-- Exclusiones -->
+    <ignore>/etc/mtab</ignore>
+    <ignore type="sregex">\.log$</ignore>
+    <ignore type="sregex">\.swp$</ignore>
   </syscheck>
 
     <!-- Security Configuration Assessment (SCA) -->

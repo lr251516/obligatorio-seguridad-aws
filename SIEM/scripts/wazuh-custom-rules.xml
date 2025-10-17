@@ -1,35 +1,35 @@
 <!-- /var/ossec/etc/rules/local_rules.xml -->
-<!-- Casos de uso personalizados para Fósil Energías Renovables -->
-<!-- AWS Deployment - Red VPC: 10.0.1.0/24 -->
+<!-- Reglas personalizadas - Fósil Energías Renovables -->
+<!-- Estas reglas funcionan con Wazuh 4.13.1 -->
 
 <group name="local,authentication,">
-  
-  <!-- CASO 1: Múltiples intentos de autenticación fallidos -->
+
+  <!-- CASO 1: Múltiples intentos de autenticación fallidos (SSH) -->
   <rule id="100001" level="10" frequency="5" timeframe="300">
-    <if_matched_sid>5503,5551</if_matched_sid>
-    <description>Múltiples intentos de autenticación fallidos detectados</description>
+    <if_matched_sid>5503</if_matched_sid>
+    <description>Wazuh: Múltiples intentos de autenticación SSH fallidos</description>
     <mitre>
       <id>T1110</id>
     </mitre>
-    <group>authentication_failures,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.14,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+    <group>authentication_failures,</group>
   </rule>
 
-  <!-- Alerta crítica si autenticación fallida desde IP externa -->
+  <!-- Alerta crítica desde IP externa -->
   <rule id="100002" level="12">
     <if_sid>100001</if_sid>
     <srcip>!10.0.1.0/24</srcip>
-    <description>Múltiples intentos fallidos desde IP externa sospechosa (fuera de VPC)</description>
+    <description>Wazuh: Brute force desde IP externa (fuera de VPC)</description>
     <mitre>
       <id>T1110</id>
     </mitre>
     <group>authentication_failures,attacks,</group>
   </rule>
 
-  <!-- Alerta crítica si es usuario privilegiado -->
+  <!-- Alerta crítica en usuario privilegiado -->
   <rule id="100003" level="12">
     <if_sid>100001</if_sid>
-    <user>root|admin|administrator|ubuntu</user>
-    <description>Múltiples intentos fallidos en cuenta privilegiada</description>
+    <user>root|admin|ubuntu</user>
+    <description>Wazuh: Brute force en cuenta privilegiada</description>
     <mitre>
       <id>T1110</id>
     </mitre>
@@ -38,126 +38,52 @@
 
 </group>
 
-<group name="local,web,attack,">
-
-  <!-- CASO 2: Detección de ataques web via WAF (ModSecurity) -->
-  <rule id="100010" level="7">
-    <decoded_as>modsecurity</decoded_as>
-    <match>ModSecurity: Warning</match>
-    <description>ModSecurity detectó actividad sospechosa</description>
-    <mitre>
-      <id>T1190</id>
-    </mitre>
-    <group>web,attack,owasp,</group>
-  </rule>
-
-  <!-- SQL Injection detectado -->
-  <rule id="100011" level="10">
-    <if_sid>100010</if_sid>
-    <match>SQL Injection Attack</match>
-    <description>Intento de SQL Injection bloqueado por WAF</description>
-    <mitre>
-      <id>T1190</id>
-    </mitre>
-    <group>web,attack,owasp,sqli,</group>
-  </rule>
-
-  <!-- XSS detectado -->
-  <rule id="100012" level="10">
-    <if_sid>100010</if_sid>
-    <match>XSS Attack|Cross-site Scripting</match>
-    <description>Intento de XSS bloqueado por WAF</description>
-    <mitre>
-      <id>T1059</id>
-    </mitre>
-    <group>web,attack,owasp,xss,</group>
-  </rule>
-
-  <!-- RCE detectado -->
-  <rule id="100013" level="12">
-    <if_sid>100010</if_sid>
-    <match>Remote Command Execution|Remote Code Execution</match>
-    <description>Intento de RCE bloqueado por WAF</description>
-    <mitre>
-      <id>T1059</id>
-    </mitre>
-    <group>web,attack,owasp,rce,</group>
-  </rule>
-
-  <!-- Múltiples ataques desde misma IP -->
-  <rule id="100014" level="12" frequency="10" timeframe="120">
-    <if_matched_sid>100010</if_matched_sid>
-    <description>Múltiples ataques web desde la misma IP</description>
-    <mitre>
-      <id>T1190</id>
-    </mitre>
-    <group>web,attack,owasp,multiple_attacks,</group>
-  </rule>
-
-</group>
-
 <group name="local,syscheck,">
 
-  <!-- CASO 3: Cambios no autorizados en configuración -->
-  
-  <!-- Cambio en archivos de usuarios -->
+  <!-- CASO 3: File Integrity Monitoring -->
+
+  <!-- Cambios en archivos de usuarios -->
   <rule id="100020" level="10">
     <if_sid>550</if_sid>
-    <match>/etc/passwd|/etc/shadow|/etc/group|/etc/gshadow</match>
-    <description>Cambio detectado en archivo de usuarios del sistema</description>
+    <match>/etc/passwd|/etc/shadow|/etc/group</match>
+    <description>Wazuh: Cambio en archivos de usuarios del sistema</description>
     <mitre>
       <id>T1098</id>
     </mitre>
-    <group>syscheck,account_changed,gdpr_IV_35.7.d,</group>
+    <group>syscheck,account_changed,</group>
   </rule>
 
-  <!-- Cambio en sudoers -->
+  <!-- Cambios en sudoers (crítico) -->
   <rule id="100021" level="12">
     <if_sid>550</if_sid>
     <match>/etc/sudoers</match>
-    <description>Cambio crítico detectado en configuración de sudo</description>
+    <description>Wazuh: Cambio CRÍTICO en configuración sudo</description>
     <mitre>
       <id>T1548.003</id>
     </mitre>
     <group>syscheck,privilege_escalation,</group>
   </rule>
 
-  <!-- Cambio en SSH -->
+  <!-- Cambios en SSH -->
   <rule id="100022" level="10">
     <if_sid>550</if_sid>
     <match>/etc/ssh/sshd_config|authorized_keys</match>
-    <description>Cambio detectado en configuración SSH</description>
+    <description>Wazuh: Cambio en configuración SSH</description>
     <mitre>
       <id>T1098.004</id>
     </mitre>
     <group>syscheck,ssh,</group>
   </rule>
 
-  <!-- Cambio en firewall -->
+  <!-- Cambios en firewall -->
   <rule id="100023" level="10">
     <if_sid>550</if_sid>
-    <match>/etc/ufw|/etc/iptables|iptables.rules</match>
-    <description>Cambio detectado en configuración de firewall</description>
+    <match>/etc/ufw|/etc/iptables</match>
+    <description>Wazuh: Cambio en configuración de firewall</description>
     <mitre>
       <id>T1562.004</id>
     </mitre>
     <group>syscheck,firewall,</group>
   </rule>
 
-  <!-- Cambio en archivos críticos de aplicación -->
-  <rule id="100024" level="8">
-    <if_sid>550</if_sid>
-    <match>/var/ossec/etc|/etc/wazuh|/etc/keycloak|/etc/kong</match>
-    <description>Cambio detectado en configuración de aplicación crítica</description>
-    <group>syscheck,application,</group>
-  </rule>
-
 </group>
-
-<!-- Configuración de alertas por email -->
-<email_alerts>
-  <email_to>admin@fosil.uy</email_to>
-  <level>10</level>
-  <do_not_delay />
-  <group>authentication_failures,</group>
-</email_alerts>

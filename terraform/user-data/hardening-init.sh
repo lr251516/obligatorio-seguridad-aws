@@ -17,7 +17,8 @@ systemctl start fail2ban
 ufw --force enable
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow from 10.0.1.0/24 to any port 22  # SSH solo desde VPC
+ufw allow from 10.0.1.0/24 to any port 22  # SSH desde VPC
+ufw allow 22/tcp  # SSH para testing (será restringido por Security Group)
 ufw allow 51820/udp  # WireGuard
 
 # /etc/hosts
