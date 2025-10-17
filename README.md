@@ -1,553 +1,333 @@
 # Obligatorio: Seguridad en Redes y Datos
----
+**Universidad ORT Uruguay - Grupo N6A**
 
-## 📋 Descripción del Proyecto
+## 📋 Descripción
 
-Implementación de infraestructura de seguridad para **Fósil Energías Renovables S.A.**, empresa uruguaya del sector energético con más de 50 años de trayectoria. El proyecto está dividido en 4 maquetas independientes pero interconectadas, desplegadas completamente en **AWS Cloud**.
+Implementación de infraestructura de seguridad para **Fósil Energías Renovables S.A.**, empresa uruguaya del sector energético en proceso de transformación digital hacia energías renovables.
 
-### Contexto de la Empresa
+La solución incluye 4 componentes de seguridad críticos desplegados en AWS, utilizando infraestructura como código (Terraform) y siguiendo estándares de la industria (CIS Benchmarks, OWASP Top 10).
 
-Fósil Energías Renovables es una empresa híbrida que combina:
-- **Infraestructura tradicional**: Oleoductos, plantas de almacenamiento y distribución de combustibles
-- **Energías renovables**: Parques solares y aerogeneradores
-- **Personal**: ~500 colaboradores
-- **Infraestructura IT**: Centro de datos en Montevideo + plataformas cloud + soluciones IoT/telemetría
-
----
-
-## 🏗️ Arquitectura del Sistema
-
+## 🏗️ Arquitectura
 ```
-┌─────────────────────────────────────────────────────┐
-│              AWS Cloud (Free Tier)                  │
-│              VPC: 10.0.0.0/16                       │
-│              Subnet: 10.0.1.0/24                    │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  ┌──────────────┐         ┌──────────────┐          │
-│  │  Maqueta 1   │         │  Maqueta 2   │          │
-│  │  WAF + Kong  │────────▶│ SIEM Wazuh   │          │
-│  │  10.0.1.10   │  Logs   │  10.0.1.20   │          │
-│  └──────┬───────┘         └──────┬───────┘          │
-│         │                        │                  │
-│         │ OAuth2/OIDC            │ Logs             │
-│         │                        │                  │
-│  ┌──────▼────────┐               │                  │
-│  │  Maqueta 3    │───────────────┘                  │
-│  │  VPN + IAM    │                                  │
-│  │  Keycloak     │                                  │
-│  │  10.0.1.30    │                                  │
-│  └──────┬────────┘                                  │
-│         │                                           │
-│         │ WireGuard VPN (10.0.0.0/24)               │
-│         │ Site-to-Site                              │
-│         │                                           │
-│  ┌──────▼────────┐                                  │
-│  │  Maqueta 4    │                                  │
-│  │  Hardening    │                                  │
-│  │  10.0.1.40    │                                  │
-│  └───────────────┘                                  │
-│                                                     │
-└─────────────────────────────────────────────────────┘
-
+┌─────────────────────────────────────────────────────────┐
+│              AWS Cloud (us-east-1)                      │
+│              VPC: 10.0.0.0/16                           │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  ┌────────────────────┐    ┌────────────────────┐     │
+│  │   WAF + API GW     │───▶│   SIEM (Wazuh)     │     │
+│  │   Kong Gateway     │    │   8GB RAM          │     │
+│  │   ModSecurity      │    │   m7i-flex.large   │     │
+│  │   10.0.1.10        │    │   10.0.1.20        │     │
+│  │   t3.micro (FREE)  │    │   $24/proyecto     │     │
+│  └────────────────────┘    └──────────┬─────────┘     │
+│           │                           │                │
+│           │                           │                │
+│  ┌────────▼──────────┐                │                │
+│  │   VPN + IAM       │────────────────┘                │
+│  │   Keycloak        │                                 │
+│  │   WireGuard       │                                 │
+│  │   10.0.1.30       │         ┌────────────────────┐ │
+│  │   t3.small        │────────▶│   Hardening VM     │ │
+│  │   $3.32/proyecto  │   VPN   │   CIS Benchmarks   │ │
+│  └───────────────────┘         │   SCA (Wazuh)      │ │
+│                                │   10.0.1.40        │ │
+│                                │   t3.micro (FREE)  │ │
+│                                └────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### Componentes por Maqueta
+## 💰 Modelo de Costos
 
-| Maqueta | IP Privada | IP Pública | Componentes | Función |
-|---------|-----------|-----------|-------------|---------|
-| **1. WAF** | 10.0.1.10 | Elastic IP | Kong Gateway + ModSecurity + OWASP CRS | Protección de aplicaciones web |
-| **2. SIEM** | 10.0.1.20 | Elastic IP | Wazuh Manager + Indexer + Dashboard | Monitoreo centralizado |
-| **3. VPN/IAM** | 10.0.1.30 | Elastic IP | WireGuard + Keycloak | VPN site-to-site + gestión de identidades |
-| **4. Hardening** | 10.0.1.40 | - | Ubuntu 22.04 hardenizado + Lynis | Servidor endurecido (solo acceso via VPN) |
+**Arquitectura optimizada para Free Tier + Créditos AWS**
 
----
+| Componente | Tipo Instancia | RAM | Costo/hora | Costo Proyecto* |
+|------------|---------------|-----|------------|-----------------|
+| WAF/Kong | t3.micro | 1GB | $0 | **GRATIS** |
+| Wazuh SIEM | m7i-flex.large | 8GB | $0.15 | $24.00 |
+| VPN/IAM | t3.small | 2GB | $0.02 | $3.32 |
+| Hardening | t3.micro | 1GB | $0 | **GRATIS** |
+| **TOTAL** | | | **$0.17/h** | **$27.32** |
+
+*Proyecto: 160 horas de trabajo (4h/día, 5d/semana, 8 semanas)
+
+**Con créditos de $118.13 disponibles:**
+- Costo del proyecto: $27.32
+- Créditos restantes: $90.81 (77%)
+- **Costo real de bolsillo: $0**
 
 ## 🚀 Quick Start
 
 ### Prerequisitos
 
-```bash
-# Verificar herramientas instaladas
-aws --version          # AWS CLI
-terraform --version    # Terraform >= 1.0
-ssh -V                 # OpenSSH
-
-# Verificar credenciales AWS
-export AWS_PROFILE=ort
-aws sts get-caller-identity
-
-# Verificar claves SSH
-ls -la ~/.ssh/obligatorio-srd*
-```
+- **AWS Account** con Free Tier activo
+- **AWS CLI** configurado con perfil `ort`
+- **Terraform** >= 1.0
+- **Par de claves SSH** en `~/.ssh/obligatorio-srd`
 
 ### Despliegue Rápido
-
 ```bash
 # 1. Clonar repositorio
 git clone https://github.com/lr251516/obligatorio-seguridad-aws.git
-cd obligatorio-seguridad-aws
+cd obligatorio-seguridad-aws/Hardening
 
-# 2. Desplegar infraestructura AWS
+# 2. Configurar AWS
 export AWS_PROFILE=ort
-chmod +x scripts/deploy-aws.sh
-./scripts/deploy-aws.sh
+aws sts get-caller-identity
 
-# 3. Esperar 5 minutos para user-data scripts
-# 4. Seguir la guía de configuración en docs/configuracion.md
+# 3. Desplegar infraestructura
+cd terraform
+terraform init
+terraform plan
+terraform apply
+
+# 4. Guardar IPs
+terraform output > ../aws-deployment-info.txt
+
+# 5. Esperar 3-5 minutos que user-data complete
+# Ver: cat /tmp/user-data-completed.log en cada VM
 ```
 
----
+### Acceso SSH
+```bash
+# Wazuh SIEM
+ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw wazuh_public_ip)
 
-## 📂 Estructura del Proyecto
+# VPN/IAM
+ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw vpn_public_ip)
 
+# WAF/Kong
+ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw waf_public_ip)
+
+# Hardening (via VPN después de configurar WireGuard)
+ssh -i ~/.ssh/obligatorio-srd ubuntu@10.0.1.40
+```
+
+## 📚 Componentes
+
+### 1. WAF + API Gateway (Maqueta 1)
+- **Kong Gateway**: API Gateway open-source
+- **ModSecurity + OWASP CRS**: Web Application Firewall
+- **Protección**: SQL Injection, XSS, RCE, OWASP Top 10
+- **Integración**: Logs enviados a Wazuh SIEM
+
+📖 [Ver documentación completa](WAF/README.md)
+
+### 2. SIEM - Wazuh (Maqueta 2)
+- **Wazuh Manager**: Motor de análisis de seguridad
+- **Wazuh Indexer**: Base de datos de eventos (OpenSearch)
+- **Wazuh Dashboard**: Visualización web
+- **Casos de Uso Personalizados**: 3 implementados
+- **SCA**: Security Configuration Assessment
+
+📖 [Ver documentación completa](SIEM/README.md)
+
+### 3. VPN + IAM (Maqueta 3)
+- **WireGuard**: VPN site-to-site moderna y eficiente
+- **Keycloak**: Identity Provider (OAuth2/OIDC)
+- **Integración**: SSO para todos los servicios
+- **Gestión**: Roles, usuarios, clientes OAuth2
+
+📖 [Ver documentación completa](VPN-IAM/README.md)
+
+### 4. Hardening con SCA (Maqueta 4)
+- **CIS Benchmarks Level 1**: Ubuntu 22.04
+- **Security Configuration Assessment**: Evaluación automática
+- **Auditd**: Auditoría del sistema
+- **Objetivo**: Score SCA >= 80%
+
+📖 [Ver documentación completa](Hardening/README.md)
+
+## 🎯 Casos de Uso Implementados
+
+### Caso 1: Autenticación Fallida (Brute Force Detection)
+**Descripción**: Detectar múltiples intentos de autenticación fallidos que puedan indicar un ataque de fuerza bruta.
+
+**Regla Wazuh**: ID 100001-100003
+- 5 intentos fallidos en 5 minutos → Alerta nivel 10
+- Desde IP externa (fuera de VPC) → Alerta nivel 12
+- Usuario privilegiado (root/admin) → Alerta nivel 12
+
+**Fuente de logs**: 
+- `/var/log/auth.log` (SSH)
+- Keycloak events
+- Kong authentication logs
+
+**MITRE ATT&CK**: T1110 (Brute Force)
+
+### Caso 2: Ataques Web via WAF (OWASP Top 10)
+**Descripción**: Detectar y bloquear intentos de explotación de vulnerabilidades web comunes.
+
+**Regla Wazuh**: ID 100010-100014
+- SQL Injection → Nivel 10
+- XSS (Cross-Site Scripting) → Nivel 10
+- RCE (Remote Code Execution) → Nivel 12
+- 10 ataques en 2 minutos desde misma IP → Nivel 12
+
+**Fuente de logs**: 
+- ModSecurity audit logs
+- Kong access logs
+
+**MITRE ATT&CK**: T1190 (Exploit Public-Facing Application)
+
+### Caso 3: Cambios No Autorizados en Configuración (FIM)
+**Descripción**: Monitorear cambios en archivos críticos del sistema que puedan indicar compromiso o mala configuración.
+
+**Regla Wazuh**: ID 100020-100024
+- `/etc/passwd`, `/etc/shadow` → Nivel 10
+- `/etc/sudoers` → Nivel 12
+- `/etc/ssh/sshd_config` → Nivel 10
+- Reglas de firewall → Nivel 10
+
+**Configuración FIM**:
+- Realtime monitoring: Sí
+- Report changes: Sí (con diff)
+- Frecuencia: 5 minutos
+
+**MITRE ATT&CK**: T1098 (Account Manipulation), T1548.003 (Sudo/Sudo Caching)
+
+## 📊 Estructura del Proyecto
 ```
 obligatorio-seguridad-aws/
-├── terraform/                         # Infraestructura como Código
-│   ├── main.tf                        # Recursos principales (VPC, EC2, SG, EIP)
-│   ├── variables.tf                   # Variables configurables
-│   ├── outputs.tf                     # Outputs (IPs, URLs, SSH commands)
-│   ├── terraform.tfvars               # Valores específicos (gitignored)
-│   └── user-data/                     # Scripts de inicialización EC2
+├── docs/                      # Documentación general
+│   ├── arquitectura.md
+│   ├── configuracion.md
+│   └── casos-de-uso.md
+├── scripts/                   # Scripts comunes
+│   ├── setup-base.sh
+│   └── connect-aws.sh
+├── terraform/                 # Infraestructura como código
+│   ├── main.tf               # Recursos AWS
+│   ├── variables.tf          # Variables
+│   ├── outputs.tf            # Outputs
+│   ├── terraform.tfvars      # Configuración
+│   └── user-data/            # Scripts de inicialización
 │       ├── wazuh-init.sh
 │       ├── vpn-init.sh
 │       ├── waf-init.sh
 │       └── hardening-init.sh
-│
-├── SIEM/                              # Maqueta 2: Wazuh SIEM
+├── SIEM/                     # Maqueta 2: Wazuh
 │   ├── README.md
 │   └── scripts/
-│       ├── install-wazuh.sh           # Instalación completa del stack
-│       ├── wazuh-agent-install.sh     # Deploy de agentes
-│       ├── wazuh-custom-rules.xml     # 3 casos de uso personalizados
-│       └── wazuh-fim-config.xml       # File Integrity Monitoring
-│
-├── VPN-IAM/                           # Maqueta 3: VPN + Identity Management
+│       ├── install-wazuh.sh
+│       ├── wazuh-agent-install.sh
+│       ├── wazuh-custom-rules.xml
+│       ├── wazuh-fim-config.xml
+│       └── wazuh-sca-custom-policy.yml
+├── VPN-IAM/                  # Maqueta 3: VPN + Keycloak
 │   ├── README.md
 │   └── scripts/
-│       ├── setup-wireguard.sh         # VPN site-to-site
-│       ├── install-keycloak.sh        # IAM provider
-│       └── create-realm.sh            # Realm de Fósil Energías
-│
-├── WAF/                               # Maqueta 1: Web Application Firewall
+│       ├── setup-wireguard.sh
+│       ├── install-keycloak.sh
+│       └── create-realm.sh
+├── WAF/                      # Maqueta 1: Kong + ModSec
 │   ├── README.md
 │   └── scripts/
-│       ├── install-kong.sh            # Kong + ModSecurity
-│       ├── custom-rules.conf          # 6 reglas personalizadas
-│       └── integrate-kong-wazuh.sh    # Integración con SIEM
-│
-├── Hardening/                         # Maqueta 4: Server Hardening
+│       └── (pendiente implementación)
+├── Hardening/                # Maqueta 4: CIS + SCA
 │   ├── README.md
 │   └── scripts/
-│       └── apply-hardening.sh         # CIS Benchmark Level 1
-│
-├── docs/                              # Documentación del proyecto
-│   ├── arquitectura.md                # Arquitectura detallada
-│   └── configuracion.md               # Guía de configuración paso a paso
-│
-├── scripts/                           # Scripts comunes y de deployment
-│   ├── deploy-aws.sh                  # Despliegue automatizado Terraform
-│   ├── connect-aws.sh                 # Conexión SSH rápida a VMs
-│   └── setup-base.sh                  # Configuración base de EC2
-│
-├── .gitignore                         # Archivos excluidos (claves, tfvars, etc.)
-└── README.md                          # README del proyecto
+│       └── apply-cis-hardening.sh
+└── README.md                 # Este archivo
 ```
 
----
+## 🔧 Orden de Configuración
 
-## 🔧 Maquetas Implementadas
+**Secuencia recomendada:**
 
-### Maqueta 1: WAF + API Gateway (Kong)
+1. **Desplegar infraestructura** (Terraform) ✅
+2. **Configurar Wazuh SIEM** (Hub central) → [Guía](SIEM/README.md)
+3. **Configurar Keycloak IAM** → [Guía](VPN-IAM/README.md)
+4. **Configurar WireGuard VPN** → [Guía](VPN-IAM/README.md)
+5. **Configurar Kong/WAF** → [Guía](WAF/README.md)
+6. **Aplicar Hardening + SCA** → [Guía](Hardening/README.md)
+7. **Instalar agentes Wazuh** en todas las VMs
+8. **Configurar casos de uso** personalizados
+9. **Testing y documentación**
 
-**Ubicación:** `/WAF/`
+## 🛡️ Estándares y Compliance
 
-**Componentes:**
-- Kong Gateway 3.4.1 (API Gateway y reverse proxy)
-- ModSecurity 3 (Web Application Firewall)
-- OWASP CRS (Core Rule Set)
-- 6 reglas personalizadas para Fósil Energías
+- **CIS Benchmarks**: Ubuntu 22.04 Level 1
+- **OWASP Top 10**: Protección via WAF
+- **NIST**: Controles de seguridad aplicables
+- **MITRE ATT&CK**: Mapeo de casos de uso
+- **GDPR**: Consideraciones de privacidad
 
-**Funcionalidades:**
-- Protección contra OWASP Top 10
-- Bloqueo de endpoints administrativos desde IPs no autorizadas
-- Rate limiting en APIs de telemetría
-- Detección de credenciales expuestas en URLs
-- Bloqueo de User-Agents de herramientas de escaneo
-- Validación de formato JSON en APIs de energía
-- Integración con Keycloak (OAuth2/OIDC)
-- Logs enviados a Wazuh SIEM
+## 📈 Métricas de Éxito
 
-**Instalación:**
+- ✅ Score SCA >= 80% en VM Hardening
+- ✅ 3 casos de uso implementados y documentados
+- ✅ Dashboard Wazuh personalizado
+- ✅ Detección exitosa de ataques simulados
+- ✅ VPN site-to-site funcional
+- ✅ SSO funcionando con Keycloak
+- ✅ WAF bloqueando OWASP Top 10
+
+## 💾 Gestión de Recursos
+
+### Iniciar Trabajo
 ```bash
-cd WAF/scripts
-sudo ./install-kong.sh
-sudo cp custom-rules.conf /opt/coreruleset/rules/REQUEST-900-CUSTOM-RULES.conf
-sudo kong restart
-sudo ./integrate-kong-wazuh.sh
-```
-
-**URLs:**
-- Kong Proxy: `http://10.0.1.10:8000`
-- Kong Admin: `http://10.0.1.10:8001`
-- ModSecurity Logs: `/var/log/modsec_audit.log`
-
----
-
-### Maqueta 2: SIEM (Wazuh)
-
-**Ubicación:** `/SIEM/`
-
-**Componentes:**
-- Wazuh Manager 4.x (Motor de análisis)
-- Wazuh Indexer (OpenSearch)
-- Wazuh Dashboard (Visualización web)
-- Agentes en todas las VMs
-
-**Casos de Uso Implementados:**
-
-#### Caso 1: Detección de Intentos de Autenticación Fallidos
-- **Rule ID:** 100001-100003
-- **Threshold:** 5 intentos en 5 minutos
-- **Niveles:** 10 (básico), 12 (IP externa o usuario privilegiado)
-- **Detección:** Múltiples intentos fallidos vía SSH, login, etc.
-
-#### Caso 2: Detección de Ataques Web via WAF
-- **Rule ID:** 100010-100014
-- **Detección:** SQL Injection, XSS, RCE, Path Traversal
-- **Fuente:** Logs de ModSecurity en Kong
-- **Niveles:** 7-12 según severidad
-
-#### Caso 3: Cambios No Autorizados en Configuración
-- **Rule ID:** 100020-100024
-- **Monitoreo:** `/etc/passwd`, `/etc/sudoers`, `/etc/ssh/sshd_config`, firewall
-- **FIM:** Realtime + report_changes
-- **Niveles:** 8-12 según criticidad
-
-**Instalación:**
-```bash
-cd SIEM/scripts
-sudo ./install-wazuh.sh
-```
-
-**Acceso:**
-- Dashboard: `https://<WAZUH_PUBLIC_IP>`
-- Usuario: `admin`
-- Password: `admin`
-
----
-
-### Maqueta 3: VPN + IAM (WireGuard + Keycloak)
-
-**Ubicación:** `/VPN-IAM/`
-
-**Componentes:**
-
-#### WireGuard VPN
-- VPN site-to-site entre VM3 (servidor) y VM4 (cliente)
-- Red del túnel: `10.0.0.0/24`
-- VM3 (servidor): `10.0.0.1`
-- VM4 (cliente): `10.0.0.2`
-- Puerto: `51820/UDP`
-
-#### Keycloak IAM
-- Identity Provider con OAuth2/OIDC
-- Realm: `fosil-energias`
-- 4 roles: admin-sistemas, admin-redes, operador-telemetria, auditor
-- 4 usuarios de prueba
-- 3 clientes OAuth2: kong-api, wazuh-dashboard, openvpn
-- Eventos enviados a Wazuh SIEM
-
-**Instalación:**
-```bash
-# Keycloak
-cd VPN-IAM/scripts
-sudo ./install-keycloak.sh
-sudo ./create-realm.sh
-
-# WireGuard (en VM3 - servidor)
-sudo ./setup-wireguard.sh server
-
-# WireGuard (en VM4 - cliente)
-sudo ./setup-wireguard.sh client
-```
-
-**Acceso:**
-- Keycloak: `http://<VPN_PUBLIC_IP>:8080`
-- Usuario: `admin`
-- Password: `admin`
-
----
-
-### Maqueta 4: Hardening (CIS Benchmark)
-
-**Ubicación:** `/Hardening/`
-
-**Componente:**
-- Script de hardening basado en CIS Benchmark Level 1 para Ubuntu 22.04
-
-**Módulos Implementados:**
-
-1. **Filesystem Hardening**: Deshabilita filesystems no utilizados
-2. **Network Security**: Sysctl hardening (SYN cookies, IP forwarding, anti-spoofing)
-3. **Firewall (UFW)**: Deny por defecto, rate limiting SSH
-4. **Auditoría (auditd)**: Monitoreo de cambios críticos
-5. **SSH Hardening**: Root login disabled, solo claves públicas, criptografía fuerte
-6. **Fail2Ban**: Protección contra brute force
-7. **Password Policies**: Complejidad mínima, aging
-8. **Services Management**: Deshabilitación de servicios innecesarios
-9. **File Permissions**: Ajuste de permisos críticos
-10. **Lynis**: Instalación para auditorías (target: score >= 80)
-
-**Instalación:**
-```bash
-cd Hardening/scripts
-sudo ./apply-hardening.sh
-sudo lynis audit system
-```
-
-**Verificación:**
-```bash
-# UFW
-sudo ufw status verbose
-
-# Auditd
-sudo aureport --summary
-
-# Fail2Ban
-sudo fail2ban-client status
-
-# Lynis score
-sudo lynis audit system | grep "Hardening index"
-```
-
----
-
-## 🎯 Casos de Uso - Testing
-
-### Test Caso 1: Autenticación Fallida
-
-```bash
-# Generar 5 intentos fallidos
-for i in {1..5}; do
-  ssh -o PreferredAuthentications=password ubuntu@10.0.1.40
-done
-
-# Verificar en Wazuh Dashboard
-# Filtrar: rule.id: 100001 OR rule.id: 100002 OR rule.id: 100003
-```
-
-### Test Caso 2: Ataques Web
-
-```bash
-WAF_IP=<WAF_PUBLIC_IP>
-
-# SQL Injection
-curl "$WAF_IP:8000/?id=1' OR '1'='1"
-
-# XSS
-curl "$WAF_IP:8000/?q=<script>alert(1)</script>"
-
-# Path Traversal (regla personalizada 900002)
-curl "$WAF_IP:8000/../../etc/passwd"
-
-# Admin desde IP no autorizada (regla 900001)
-curl "$WAF_IP:8000/admin"
-
-# User-Agent malicioso (regla 900007)
-curl -A "sqlmap" "$WAF_IP:8000/"
-
-# Verificar en Wazuh Dashboard
-# Filtrar: rule.id: 100010-100014
-```
-
-### Test Caso 3: FIM (File Integrity Monitoring)
-
-```bash
-# SSH a cualquier VM
-ssh -i ~/.ssh/obligatorio-srd ubuntu@<VM_IP>
-
-# Modificar archivo crítico
-sudo nano /etc/passwd
-# Agregar una línea de comentario y guardar
-
-# Verificar en Wazuh Dashboard en segundos
-# Filtrar: rule.id: 100020-100024
-```
-
----
-
-## 📝 Configuración Paso a Paso
-
-### Orden de Configuración (IMPORTANTE)
-
-La configuración debe seguir esta secuencia obligatoria:
-
-1. **Wazuh SIEM** (VM2 - 10.0.1.20) - Hub central de logs
-2. **Keycloak IAM** (VM3 - 10.0.1.30) - Autenticación
-3. **WireGuard VPN** (VM3 ↔ VM4) - Conectividad
-4. **Kong WAF** (VM1 - 10.0.1.10) - Protección de APIs
-5. **Hardening** (VM4 - 10.0.1.40) - Endurecimiento
-
-Ver guía detallada en: [`docs/configuracion.md`](docs/configuracion.md)
-
----
-
-## 🔑 Información de Acceso
-
-### Conexión SSH
-
-```bash
-# Script helper para conexión rápida
-./scripts/connect-aws.sh <vm>
-
-# Opciones:
-./scripts/connect-aws.sh wazuh     # VM2: Wazuh SIEM
-./scripts/connect-aws.sh vpn       # VM3: VPN/IAM
-./scripts/connect-aws.sh waf       # VM1: WAF/Kong
-
-# VM4 (hardening) solo accesible via VPN:
-ssh -i ~/.ssh/obligatorio-srd ubuntu@10.0.1.40
-```
-
-### URLs de Servicios
-
-```bash
-# Ver todas las URLs después del deployment
 cd terraform
-terraform output
 
-# URLs principales:
-# - Wazuh Dashboard: https://<WAZUH_PUBLIC_IP>
-# - Keycloak: http://<VPN_PUBLIC_IP>:8080
-# - Kong Proxy: http://<WAF_PUBLIC_IP>:8000
-# - Kong Admin: http://<WAF_PUBLIC_IP>:8001
+# Las instancias FREE (WAF, Hardening) están siempre ON
+# Solo las pagas (Wazuh, VPN/IAM) necesitan gestión
+
+# Iniciar VMs pagas
+aws ec2 start-instances \
+  --instance-ids $(terraform output -raw wazuh_instance_id) $(terraform output -raw vpn_instance_id) \
+  --profile ort
+
+# Esperar que estén running
+aws ec2 wait instance-running \
+  --instance-ids $(terraform output -raw wazuh_instance_id) $(terraform output -raw vpn_instance_id) \
+  --profile ort
 ```
----
 
-## 🔒 Seguridad y Cumplimiento
-
-### Standards Implementados
-
-- **OWASP Top 10**: Protección via Kong + ModSecurity
-- **CIS Benchmark Level 1**: Ubuntu 22.04 hardening
-- **NIST Cybersecurity Framework**: Monitoreo con Wazuh
-- **MITRE ATT&CK**: Reglas de detección mapeadas
-
-### Security Groups AWS
-
-| VM | SSH (22) | Servicios | Notas |
-|----|---------|-----------|-------|
-| Wazuh | Tu IP | 443, 1514 | Dashboard público |
-| VPN/IAM | Tu IP | 8080, 51820 | Keycloak público, WG |
-| WAF | Tu IP | 8000, 8001, 8443 | Kong público |
-| Hardening | Solo VPN | 51820 | Sin acceso público directo |
-
-### Firewall Local (UFW)
-
-Todas las VMs tienen UFW configurado con:
-- Deny incoming por defecto
-- Allow outgoing por defecto
-- SSH solo desde red interna AWS (10.0.1.0/24)
-- Rate limiting en SSH
-- Logging habilitado
-
----
-
-## 🛠️ Troubleshooting
-
-### Terraform
-
+### Detener Trabajo (IMPORTANTE)
 ```bash
-# Ver estado actual
+# Detener VMs pagas para no consumir créditos
+aws ec2 stop-instances \
+  --instance-ids $(terraform output -raw wazuh_instance_id) $(terraform output -raw vpn_instance_id) \
+  --profile ort
+
+# Las VMs FREE siguen corriendo (no hay costo)
+```
+
+### Destruir Todo
+```bash
 cd terraform
-terraform show
-
-# Refrescar outputs
-terraform refresh
-terraform output
-
-# Recrear recurso específico
-terraform taint aws_instance.wazuh
-terraform apply
-
-# Destruir y recrear todo
 terraform destroy
-terraform apply
+# Usar solo al finalizar completamente el proyecto
 ```
 
-### Wazuh
+## 📝 Documentación Adicional
 
-```bash
-# Verificar servicios
-sudo systemctl status wazuh-manager
-sudo systemctl status wazuh-indexer
-sudo systemctl status wazuh-dashboard
+- [Guía de Despliegue AWS](docs/aws-deployment-guide.md)
+- [Arquitectura Detallada](docs/arquitectura.md)
+- [Configuración de Servicios](docs/configuracion.md)
+- [Casos de Uso](docs/casos-de-uso.md)
 
-# Ver logs
-sudo tail -f /var/ossec/logs/ossec.log
-sudo tail -f /var/ossec/logs/alerts/alerts.log
+## 🔗 Referencias
 
-# Listar agentes conectados
-sudo /var/ossec/bin/agent_control -l
-```
-
-### Kong
-
-```bash
-# Estado de Kong
-sudo kong health
-
-# Ver configuración
-curl http://localhost:8001/
-
-# Ver plugins activos
-curl http://localhost:8001/plugins
-
-# Logs
-sudo tail -f /var/log/kong/error.log
-sudo tail -f /var/log/modsec_audit.log
-```
-
-### WireGuard
-
-```bash
-# Ver estado
-sudo wg show
-
-# Logs
-sudo journalctl -u wg-quick@wg0 -f
-
-# Reiniciar
-sudo systemctl restart wg-quick@wg0
-
-# Test de conectividad
-ping 10.0.0.1  # Desde cliente a servidor
-ping 10.0.0.2  # Desde servidor a cliente
-```
-
----
-
-## 📚 Documentación Adicional
-
-- **Arquitectura detallada**: [`docs/arquitectura.md`](docs/arquitectura.md)
-- **Guía de configuración**: [`docs/configuracion.md`](docs/configuracion.md)
-- **Maqueta 1 (WAF)**: [`WAF/README.md`](WAF/README.md)
-- **Maqueta 2 (SIEM)**: [`SIEM/README.md`](SIEM/README.md)
-- **Maqueta 3 (VPN/IAM)**: [`VPN-IAM/README.md`](VPN-IAM/README.md)
-- **Maqueta 4 (Hardening)**: [`Hardening/README.md`](Hardening/README.md)
-
----
+- **Wazuh**: https://documentation.wazuh.com/
+- **Terraform AWS**: https://registry.terraform.io/providers/hashicorp/aws/
+- **CIS Benchmarks**: https://www.cisecurity.org/cis-benchmarks
+- **Kong Gateway**: https://docs.konghq.com/
+- **Keycloak**: https://www.keycloak.org/documentation
+- **WireGuard**: https://www.wireguard.com/
 
 ## 👥 Autores
 
-**Universidad ORT Uruguay**  
-**Integrantes:** Lucas Rodriguez (lr251516)
-**Carrera:** Analista en Infraestructura Informática  
-**Materia:** Seguridad en Redes y Datos  
-**Fecha de Entrega:** 03/12/2025
+- **Lucas Rodriguez** - Universidad ORT Uruguay
+- **Carrera**: Analista en Infraestructura Informática
+- **Materia**: Seguridad en Redes y Datos
+- **Grupo**: N6A
+- **Fecha**: Diciembre 2025
 
----
+## 📧 Contacto
+
+- **GitHub**: [@lr251516](https://github.com/lr251516)
+- **Repositorio**: https://github.com/lr251516/obligatorio-seguridad-aws
 
 ## 📄 Licencia
 
@@ -555,6 +335,23 @@ Proyecto académico - Universidad ORT Uruguay
 
 ---
 
-**Última actualización:** $(date +%Y-%m-%d)
+## ⚠️ Notas Importantes
+
+1. **Seguridad**: Este proyecto es para fines académicos. En producción:
+   - Usar certificados SSL reales
+   - Cambiar todas las contraseñas por defecto
+   - Implementar MFA
+   - Configurar backups automáticos
+   - Usar secretos de AWS Secrets Manager
+
+2. **Costos**: Siempre **detener las VMs pagas** (Wazuh, VPN/IAM) cuando no trabajes para no consumir créditos innecesariamente.
+
+3. **Datos**: Las instancias detenidas conservan todos los datos. Solo se pierde información si ejecutas `terraform destroy`.
+
+4. **Free Tier**: Las instancias t3.micro (WAF, Hardening) pueden correr 24/7 sin costo durante 12 meses.
 
 ---
+
+**Estado del Proyecto**: 🟢 Activo - En desarrollo
+
+**Última actualización**: Octubre 2025

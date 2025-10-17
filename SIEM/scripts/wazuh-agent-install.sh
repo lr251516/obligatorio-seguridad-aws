@@ -64,6 +64,22 @@ sudo tee /var/ossec/etc/ossec.conf > /dev/null <<EOF
     <directories check_all="yes" realtime="yes">/etc/ssh/sshd_config</directories>
   </syscheck>
 
+    <!-- Security Configuration Assessment (SCA) -->
+  <sca>
+    <enabled>yes</enabled>
+    <scan_on_start>yes</scan_on_start>
+    <interval>12h</interval>
+    <skip_nfs>yes</skip_nfs>
+    
+    <!-- Políticas CIS para Ubuntu 22.04 -->
+    <policies>
+      <policy>cis_ubuntu22-04.yml</policy>
+      <policy>sca_unix_audit.yml</policy>
+    </policies>
+  </sca>
+
+  <!-- Active response -->
+
   <!-- Log collection - Ajustar según la VM -->
   <localfile>
     <log_format>syslog</log_format>

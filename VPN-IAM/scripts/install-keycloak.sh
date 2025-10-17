@@ -59,6 +59,14 @@ EOF
 cd /opt/keycloak
 sudo -u keycloak bin/kc.sh build
 
+sudo tee /opt/keycloak/conf/jvm-opts.conf > /dev/null <<'JVMEOF'
+-Xms512m
+-Xmx1024m
+-XX:MetaspaceSize=128m
+-XX:MaxMetaspaceSize=256m
+-Dfile.encoding=UTF-8
+JVMEOF
+
 echo "[+] Creando usuario administrador..."
 sudo -u keycloak KEYCLOAK_ADMIN=admin KEYCLOAK_ADMIN_PASSWORD=admin bin/kc.sh start &
 KC_PID=$!

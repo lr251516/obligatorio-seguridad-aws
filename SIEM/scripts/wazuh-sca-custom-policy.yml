@@ -1,0 +1,233 @@
+# Security Configuration Assessment
+# Política personalizada para Fósil Energías Renovables
+# Basada en CIS Ubuntu 22.04 Level 1
+
+policy:
+  id: "fosil_security_policy"
+  file: "fosil_security_policy.yml"
+  name: "Fósil Energías - Política de Seguridad"
+  description: "Política de seguridad personalizada basada en CIS Level 1"
+  references:
+    - https://www.cisecurity.org/cis-benchmarks/
+
+requirements:
+  title: "Verificar que es Ubuntu 22.04"
+  description: "Requisitos para ejecutar esta política"
+  condition: all
+  rules:
+    - 'f:/etc/os-release -> r:^NAME="Ubuntu" && r:VERSION_ID="22.04"'
+
+checks:
+  # 1. Filesystem Configuration
+  - id: 10001
+    title: "Ensure /tmp is mounted with noexec option"
+    description: "El directorio /tmp debe estar montado con noexec"
+    rationale: "Previene ejecución de binarios en /tmp"
+    remediation: "Configurar /tmp en /etc/fstab con noexec"
+    compliance:
+      - cis: "1.1.3"
+    condition: all
+    rules:
+      - 'c:mount -> r:/tmp && r:noexec'
+
+  - id: 10002
+    title: "Ensure /tmp is mounted with nodev option"
+    description: "El directorio /tmp debe estar montado con nodev"
+    rationale: "Previene uso de dispositivos de bloque en /tmp"
+    remediation: "Configurar /tmp en /etc/fstab con nodev"
+    compliance:
+      - cis: "1.1.2"
+    condition: all
+    rules:
+      - 'c:mount -> r:/tmp && r:nodev'
+
+  # 2. SSH Configuration
+  - id: 10003
+    title: "Ensure SSH Protocol is set to 2"
+    description: "SSH debe usar Protocol 2"
+    rationale: "Protocol 1 tiene vulnerabilidades conocidas"
+    remediation: "En sshd_config: Protocol 2"
+    compliance:
+      - cis: "5.2.2"
+    condition: all
+    rules:
+      - 'f:/etc/ssh/sshd_config -> r:^Protocol\s+2'
+
+  - id: 10004
+    title: "Ensure SSH PermitRootLogin is disabled"
+    description: "Login directo de root por SSH debe estar deshabilitado"
+    rationale: "Root no debe poder autenticarse directamente"
+    remediation: "En sshd_config: PermitRootLogin no"
+    compliance:
+      - cis: "5.2.8"
+    condition: all
+    rules:
+      - 'f:/etc/ssh/sshd_config -> r:^PermitRootLogin\s+no'
+
+  - id: 10005
+    title: "Ensure SSH MaxAuthTries is 4 or less"
+    description: "Máximo 4 intentos de autenticación SSH"
+    rationale: "Limita ataques de fuerza bruta"
+    remediation: "En sshd_config: MaxAuthTries 4"
+    compliance:
+      - cis: "5.2.5"
+    condition: all
+    rules:
+      - 'f:/etc/ssh/sshd_config -> n:^MaxAuthTries\s+(\d+) compare <= 4'
+
+  - id: 10006
+    title: "Ensure SSH X11 forwarding is disabled"
+    description: "X11 forwarding debe estar deshabilitado"
+    rationale: "Reduce superficie de ataque"
+    remediation: "En sshd_config: X11Forwarding no"
+    compliance:
+      - cis: "5.2.6"
+    condition: all
+    rules:
+      - 'f:/etc/ssh/sshd_config -> r:^X11Forwarding\s+no'
+
+  # 3. File Permissions
+  - id: 10007
+    title: "Ensure permissions on /etc/passwd are configured"
+    description: "/etc/passwd debe tener permisos 644"
+    rationale: "Protege información de cuentas"
+    remediation: "chmod 644 /etc/passwd"
+    compliance:
+      - cis: "6.1.2"
+    condition: all
+    rules:
+      - 'c:stat -L -c %a /etc/passwd -> r:^644$'
+
+  - id: 10008
+    title: "Ensure permissions on /etc/shadow are configured"
+    description: "/etc/shadow debe tener permisos 600"
+    rationale: "Protege hashes de contraseñas"
+    remediation: "chmod 600 /etc/shadow"
+    compliance:
+      - cis: "6.1.3"
+    condition: all
+    rules:
+      - 'c:stat -L -c %a /etc/shadow -> r:^600$'
+
+  - id: 10009
+    title: "Ensure permissions on /etc/gshadow are configured"
+    description: "/etc/gshadow debe tener permisos 600"
+    rationale: "Protege información de grupos"
+    remediation: "chmod 600 /etc/gshadow"
+    compliance:
+      - cis: "6.1.5"
+    condition: all
+    rules:
+      - 'c:stat -L -c %a /etc/gshadow -> r:^600$'
+
+  # 4. Kernel Parameters
+  - id: 10010
+    title: "Ensure IP forwarding is disabled"
+    description: "IP forwarding debe estar deshabilitado (excepto en VPN)"
+    rationale: "Previene que el sistema actúe como router"
+    remediation: "sysctl -w net.ipv4.ip_forward=0"
+    compliance:
+      - cis: "3.1.1"
+    condition: any
+    rules:
+      - 'c:sysctl net.ipv4.ip_forward -> r:= 0'
+      - 'f:/etc/hostname -> r:vpn-iam'  # Excepción para VM VPN
+
+  - id: 10011
+    title: "Ensure source routed packets are not accepted"
+    description: "Paquetes source-routed deben ser rechazados"
+    rationale: "Previene ataques de routing malicioso"
+    remediation: "sysctl -w net.ipv4.conf.all.accept_source_route=0"
+    compliance:
+      - cis: "3.1.2"
+    condition: all
+    rules:
+      - 'c:sysctl net.ipv4.conf.all.accept_source_route -> r:= 0'
+
+  - id: 10012
+    title: "Ensure ICMP redirects are not accepted"
+    description: "ICMP redirects deben ser rechazados"
+    rationale: "Previene manipulación de tablas de routing"
+    remediation: "sysctl -w net.ipv4.conf.all.accept_redirects=0"
+    compliance:
+      - cis: "3.1.3"
+    condition: all
+    rules:
+      - 'c:sysctl net.ipv4.conf.all.accept_redirects -> r:= 0'
+
+  # 5. Auditd Configuration
+  - id: 10013
+    title: "Ensure auditd is installed"
+    description: "El paquete auditd debe estar instalado"
+    rationale: "Necesario para auditoría del sistema"
+    remediation: "apt-get install auditd"
+    compliance:
+      - cis: "4.1.1.1"
+    condition: all
+    rules:
+      - 'c:dpkg -s auditd -> r:Status: install ok installed'
+
+  - id: 10014
+    title: "Ensure auditd service is enabled"
+    description: "El servicio auditd debe estar habilitado"
+    rationale: "Asegura auditoría continua"
+    remediation: "systemctl enable auditd"
+    compliance:
+      - cis: "4.1.1.2"
+    condition: all
+    rules:
+      - 'c:systemctl is-enabled auditd -> r:^enabled'
+
+  # 6. Firewall Configuration
+  - id: 10015
+    title: "Ensure ufw is installed"
+    description: "UFW debe estar instalado"
+    rationale: "Firewall es componente crítico de seguridad"
+    remediation: "apt-get install ufw"
+    compliance:
+      - cis: "3.5.1.1"
+    condition: all
+    rules:
+      - 'c:dpkg -s ufw -> r:Status: install ok installed'
+
+  - id: 10016
+    title: "Ensure ufw is enabled"
+    description: "UFW debe estar activo"
+    rationale: "Firewall debe estar funcionando"
+    remediation: "ufw enable"
+    compliance:
+      - cis: "3.5.1.2"
+    condition: all
+    rules:
+      - 'c:ufw status -> r:Status: active'
+
+  # 7. Password Policy
+  - id: 10017
+    title: "Ensure password creation requirements are configured"
+    description: "Requisitos de contraseñas deben estar configurados"
+    rationale: "Asegura contraseñas fuertes"
+    remediation: "Configurar /etc/security/pwquality.conf"
+    compliance:
+      - cis: "5.3.1"
+    condition: all
+    rules:
+      - 'f:/etc/security/pwquality.conf -> r:^minlen\s*=\s*\d+ && n:^minlen\s*=\s*(\d+) compare >= 14'
+
+  # 8. Servicios específicos Fósil
+  - id: 10018
+    title: "Ensure Wazuh agent is running"
+    description: "El agente Wazuh debe estar corriendo"
+    rationale: "Monitoreo de seguridad centralizado"
+    remediation: "systemctl start wazuh-agent"
+    condition: all
+    rules:
+      - 'c:systemctl is-active wazuh-agent -> r:^active'
+
+  - id: 10019
+    title: "Ensure fail2ban is enabled"
+    description: "Fail2ban debe estar habilitado"
+    rationale: "Protección contra ataques de fuerza bruta"
+    remediation: "systemctl enable fail2ban"
+    condition: all
+    rules:
+      - 'c:systemctl is-enabled fail2ban -> r:^enabled'
