@@ -11,9 +11,12 @@ obligatorio-srd*
 
 # Terraform
 .terraform/
-*.tfstate*
+*.tfstate
+*.tfstate.*
 *.tfplan
+tfplan
 .terraform.lock.hcl
+terraform/aws-deployment-info.txt
 
 # OS files
 .DS_Store
@@ -32,6 +35,7 @@ logs/
 # Temporary files
 tmp/
 temp/
+CAMBIOS-DEPLOYMENT.md
 
 # AWS
 aws-access-info.txt
@@ -40,6 +44,3 @@ aws-access-info.txt
 *.vdi
 *.vmdk
 *.iso
-CAMBIOS-DEPLOYMENT.md
-terraform/aws-deployment-info.txt
-terraform/aws-deployment-info.txt

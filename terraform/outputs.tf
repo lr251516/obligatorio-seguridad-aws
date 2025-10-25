@@ -26,12 +26,16 @@ output "hardening_private_ip" {
   value = aws_instance.hardening.private_ip
 }
 
+output "hardening_public_ip" {
+  value = aws_eip.hardening.public_ip
+}
+
 output "ssh_commands" {
   value = {
     wazuh     = "ssh -i ~/.ssh/obligatorio-srd ubuntu@${aws_eip.wazuh.public_ip}"
     vpn       = "ssh -i ~/.ssh/obligatorio-srd ubuntu@${aws_eip.vpn.public_ip}"
     waf       = "ssh -i ~/.ssh/obligatorio-srd ubuntu@${aws_eip.waf.public_ip}"
-    hardening = "ssh -i ~/.ssh/obligatorio-srd ubuntu@10.0.1.40  # Via VPN"
+    hardening = "ssh -i ~/.ssh/obligatorio-srd ubuntu@${aws_eip.hardening.public_ip}"
   }
 }
 
@@ -45,7 +49,7 @@ output "infrastructure_summary" {
   WAF/Kong:     ${aws_eip.waf.public_ip}    (10.0.1.10 - t3.micro)
   Wazuh SIEM:   ${aws_eip.wazuh.public_ip}  (10.0.1.20 - m7i-flex.large 8GB)
   VPN/IAM:      ${aws_eip.vpn.public_ip}    (10.0.1.30 - t3.small)
-  Hardening:    10.0.1.40                    (t3.micro - acceso via VPN)
+  Hardening:    ${aws_eip.hardening.public_ip}    (10.0.1.40 - t3.micro)
 
   URLs:
     - Wazuh:    https://${aws_eip.wazuh.public_ip}

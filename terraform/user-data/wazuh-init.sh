@@ -41,5 +41,16 @@ cat >> /etc/hosts <<HOSTS
 10.0.1.40   hardening-vm   hardening
 HOSTS
 
-echo "Wazuh init completed" > /tmp/user-data-completed.log
+# Instalar Wazuh All-in-One
+echo "Instalando Wazuh SIEM..." >> /tmp/user-data.log
+cd /tmp
+curl -sO https://packages.wazuh.com/4.13/wazuh-install.sh
+bash wazuh-install.sh -a 2>&1 | tee -a /tmp/wazuh-installation.log
+
+# Extraer y guardar contraseña
+PASSWORD=$(grep "Password:" /tmp/wazuh-installation.log | tail -1 | awk '{print $2}')
+echo "$PASSWORD" > /root/wazuh-password.txt
+chmod 600 /root/wazuh-password.txt
+
+echo "Wazuh SIEM instalado - Password en /root/wazuh-password.txt" > /tmp/user-data-completed.log
 date >> /tmp/user-data-completed.log

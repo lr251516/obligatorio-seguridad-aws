@@ -422,6 +422,16 @@ resource "aws_instance" "hardening" {
   }
 }
 
+# Elastic IP - Hardening (para testing/configuración inicial)
+resource "aws_eip" "hardening" {
+  instance = aws_instance.hardening.id
+  domain   = "vpc"
+
+  tags = {
+    Name = "fosil-hardening-eip"
+  }
+}
+
 # Elastic IP para Wazuh (dashboard accesible)
 resource "aws_eip" "wazuh" {
   instance = aws_instance.wazuh.id

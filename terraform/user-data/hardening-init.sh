@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get upgrade -y
 apt-get install -y git curl auditd aide ufw fail2ban unattended-upgrades
@@ -44,7 +45,7 @@ apt-get remove --purge -y postfix 2>/dev/null || true
 WAZUH_MANAGER="10.0.1.20" \
 WAZUH_AGENT_NAME="hardening-vm" \
 DEBIAN_FRONTEND=noninteractive \
-apt-get install -y wazuh-agent
+apt-get install -y wazuh-agent=4.13.1-1
 
 # Configurar FIM (File Integrity Monitoring)
 sed -i '/<\/ossec_config>$/i \

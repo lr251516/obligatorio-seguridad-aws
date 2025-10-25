@@ -14,26 +14,26 @@ La solución incluye 4 componentes de seguridad críticos desplegados en AWS, ut
 │              VPC: 10.0.0.0/16                           │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
-│  ┌────────────────────┐    ┌────────────────────┐     │
-│  │   WAF + API GW     │───▶│   SIEM (Wazuh)     │     │
-│  │   Kong Gateway     │    │   8GB RAM          │     │
-│  │   ModSecurity      │    │   m7i-flex.large   │     │
-│  │   10.0.1.10        │    │   10.0.1.20        │     │
-│  │   t3.micro         │    │                    │     │
-│  └────────────────────┘    └──────────┬─────────┘     │
-│           │                           │                │
-│           │                           │                │
-│  ┌────────▼──────────┐                │                │
-│  │   VPN + IAM       │────────────────┘                │
-│  │   Keycloak        │                                 │
-│  │   WireGuard       │                                 │
-│  │   10.0.1.30       │         ┌────────────────────┐ │
-│  │   t3.small        │────────▶│   Hardening VM     │ │
-│  │                   │   VPN   │   CIS Benchmarks   │ │
-│  └───────────────────┘         │   SCA (Wazuh)      │ │
-│                                │   10.0.1.40        │ │
-│                                │   t3.micro         │ │
-│                                └────────────────────┘ │
+│  ┌────────────────────┐    ┌────────────────────┐       │
+│  │   WAF + API GW     │───▶│   SIEM (Wazuh)     │       │
+│  │   Kong Gateway     │    │   8GB RAM          │       │
+│  │   ModSecurity      │    │   m7i-flex.large   │       │
+│  │   10.0.1.10        │    │   10.0.1.20        │       │
+│  │   t3.micro         │    │                    │       │
+│  └────────────────────┘    └──────────┬─────────┘       │
+│           │                           │                 │
+│           │                           │                 │
+│  ┌────────▼──────────┐                │                 │
+│  │   VPN + IAM       │────────────────┘                 │
+│  │   Keycloak        │                                  │
+│  │   WireGuard       │                                  │
+│  │   10.0.1.30       │         ┌────────────────────┐   │
+│  │   t3.small        │────────▶│   Hardening VM     │   │
+│  │                   │   VPN   │   CIS Benchmarks   │   │
+│  └───────────────────┘         │   SCA (Wazuh)      │   │
+│                                │   10.0.1.40        │   │
+│                                │   t3.micro         │   │
+│                                └────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -61,10 +61,10 @@ terraform output > aws-deployment-info.txt
 
 ### Acceso SSH
 ```bash
-ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw wazuh_public_ip)   # Wazuh
-ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw vpn_public_ip)     # VPN/IAM
-ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw waf_public_ip)     # WAF
-ssh -i ~/.ssh/obligatorio-srd ubuntu@10.0.1.40                                  # Hardening (via VPN)
+ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw wazuh_public_ip)      # Wazuh
+ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw vpn_public_ip)        # VPN/IAM
+ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw waf_public_ip)        # WAF
+ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw hardening_public_ip)  # Hardening
 ```
 
 ## 📚 Componentes
@@ -127,9 +127,8 @@ Monitorea cambios en archivos críticos del sistema.
 
 ## 📝 Documentación
 
-- [Arquitectura Detallada](docs/arquitectura.md)
-- [Configuración de Servicios](docs/configuracion.md)
-- [Casos de Uso](docs/casos-de-uso.md)
+- [Guía de Despliegue](docs/deployment-guide.md) - Pasos completos, troubleshooting y lecciones aprendidas
+- READMEs específicos por componente: [SIEM](SIEM/), [WAF](WAF/), [VPN-IAM](VPN-IAM/), [Hardening](Hardening/)
 
 ## 👥 Autores
 

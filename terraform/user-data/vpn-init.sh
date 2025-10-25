@@ -47,7 +47,7 @@ apt-get remove --purge -y postfix 2>/dev/null || true
 WAZUH_MANAGER="10.0.1.20" \
 WAZUH_AGENT_NAME="vpn-iam" \
 DEBIAN_FRONTEND=noninteractive \
-apt-get install -y wazuh-agent
+apt-get install -y wazuh-agent=4.13.1-1
 
 # FIM para VPN/Keycloak
 sed -i '/<\/ossec_config>$/i \
