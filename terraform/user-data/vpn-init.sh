@@ -7,6 +7,12 @@ apt-get install -y git curl wireguard-tools openjdk-17-jre-headless
 hostnamectl set-hostname vpn-iam
 mkdir -p /opt/fosil/scripts
 
+# Clonar repo con scripts
+cd /opt
+git clone https://github.com/lr251516/obligatorio-srd-aws.git fosil || true
+cd fosil
+git pull origin main || true
+
 # Swap moderado (2GB)
 fallocate -l 2G /swapfile
 chmod 600 /swapfile

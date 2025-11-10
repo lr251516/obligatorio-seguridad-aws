@@ -7,6 +7,7 @@ apt-get install -y git curl auditd aide ufw fail2ban unattended-upgrades
 
 hostnamectl set-hostname hardening-vm
 mkdir -p /opt/fosil/scripts
+cd /opt && git clone https://github.com/lr251516/obligatorio-srd-aws.git fosil || (cd fosil && git pull)
 
 # Habilitar servicios de seguridad
 systemctl enable auditd
@@ -19,7 +20,7 @@ ufw --force enable
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow from 10.0.1.0/24 to any port 22  # SSH desde VPC
-ufw allow 22/tcp  # SSH para testing (será restringido por Security Group)
+ufw allow 22/tcp  # SSH para testing (restringido luego por Security Group)
 ufw allow 51820/udp  # WireGuard
 
 # /etc/hosts

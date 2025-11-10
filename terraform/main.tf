@@ -353,7 +353,7 @@ resource "aws_instance" "wazuh" {
 # EC2 Instance - VPN/IAM
 resource "aws_instance" "vpn" {
   ami           = data.aws_ami.ubuntu.id
-  instance_type = "t3.small"
+  instance_type = "c7i-flex.large"  # 4GB RAM para Keycloak (free tier)
   key_name      = aws_key_pair.deployer.key_name
   subnet_id     = aws_subnet.public.id
 

@@ -52,5 +52,169 @@ PASSWORD=$(grep "Password:" /tmp/wazuh-installation.log | tail -1 | awk '{print 
 echo "$PASSWORD" > /root/wazuh-password.txt
 chmod 600 /root/wazuh-password.txt
 
+# ============================================
+# APLICAR REGLAS CUSTOM DE WAZUH
+# ============================================
+echo "[$(date)] Aplicando reglas personalizadas de Wazuh..." >> /tmp/user-data.log
+
+cat > /var/ossec/etc/rules/local_rules.xml <<'RULES'
+<!-- /var/ossec/etc/rules/local_rules.xml -->
+<!-- Reglas personalizadas - Fósil Energías Renovables -->
+<!-- Estas reglas funcionan con Wazuh 4.13.1 -->
+
+<group name="local,authentication,">
+
+  <!-- CASO 1: Múltiples intentos de autenticación fallidos (SSH) -->
+  <rule id="100001" level="10" frequency="5" timeframe="300">
+    <if_matched_sid>5503</if_matched_sid>
+    <description>Wazuh: Múltiples intentos de autenticación SSH fallidos</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>authentication_failures,</group>
+  </rule>
+
+  <!-- Alerta crítica desde IP externa -->
+  <rule id="100002" level="12">
+    <if_sid>100001</if_sid>
+    <srcip>!10.0.1.0/24</srcip>
+    <description>Wazuh: Brute force desde IP externa (fuera de VPC)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>authentication_failures,attacks,</group>
+  </rule>
+
+  <!-- Alerta crítica en usuario privilegiado -->
+  <rule id="100003" level="12">
+    <if_sid>100001</if_sid>
+    <user>root|admin|ubuntu</user>
+    <description>Wazuh: Brute force en cuenta privilegiada</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>authentication_failures,privilege_escalation,</group>
+  </rule>
+
+</group>
+
+<group name="local,web,attack,">
+
+  <!-- CASO 2: Ataques Web (OWASP Top 10) via ModSecurity/Kong -->
+
+  <!-- SQL Injection detectado por ModSecurity -->
+  <rule id="100010" level="10">
+    <if_sid>31100</if_sid>
+    <match>sql|union|select|insert|drop|delete|update</match>
+    <description>Kong: Intento de SQL Injection detectado</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>web_attack,sql_injection,</group>
+  </rule>
+
+  <!-- XSS detectado -->
+  <rule id="100011" level="10">
+    <if_sid>31100</if_sid>
+    <match>script|onerror|onload|alert\(|eval\(|javascript:</match>
+    <description>Kong: Intento de XSS (Cross-Site Scripting) detectado</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>web_attack,xss,</group>
+  </rule>
+
+  <!-- RCE (Remote Code Execution) -->
+  <rule id="100012" level="12">
+    <if_sid>31100</if_sid>
+    <match>exec|system|passthru|shell_exec|/bin/bash|/bin/sh</match>
+    <description>Kong: Intento CRÍTICO de RCE (Remote Code Execution)</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>web_attack,rce,</group>
+  </rule>
+
+  <!-- Path Traversal / LFI -->
+  <rule id="100013" level="10">
+    <if_sid>31100</if_sid>
+    <match>\.\.\/|\.\.\\|etc/passwd|boot\.ini</match>
+    <description>Kong: Intento de Path Traversal detectado</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>web_attack,path_traversal,</group>
+  </rule>
+
+  <!-- Múltiples ataques web desde misma IP -->
+  <rule id="100014" level="12" frequency="10" timeframe="300">
+    <if_matched_sid>100010</if_matched_sid>
+    <same_source_ip />
+    <description>Kong: Múltiples ataques web desde la misma IP (posible escaneo)</description>
+    <mitre>
+      <id>T1190</id>
+      <id>T1595</id>
+    </mitre>
+    <group>web_attack,reconnaissance,</group>
+  </rule>
+
+</group>
+
+<group name="local,syscheck,">
+
+  <!-- CASO 3: File Integrity Monitoring -->
+
+  <!-- Cambios en archivos de usuarios -->
+  <rule id="100020" level="10">
+    <if_sid>550</if_sid>
+    <match>/etc/passwd|/etc/shadow|/etc/group</match>
+    <description>Wazuh: Cambio en archivos de usuarios del sistema</description>
+    <mitre>
+      <id>T1098</id>
+    </mitre>
+    <group>syscheck,account_changed,</group>
+  </rule>
+
+  <!-- Cambios en sudoers (crítico) -->
+  <rule id="100021" level="12">
+    <if_sid>550</if_sid>
+    <match>/etc/sudoers</match>
+    <description>Wazuh: Cambio CRÍTICO en configuración sudo</description>
+    <mitre>
+      <id>T1548.003</id>
+    </mitre>
+    <group>syscheck,privilege_escalation,</group>
+  </rule>
+
+  <!-- Cambios en SSH -->
+  <rule id="100022" level="10">
+    <if_sid>550</if_sid>
+    <match>/etc/ssh/sshd_config|authorized_keys</match>
+    <description>Wazuh: Cambio en configuración SSH</description>
+    <mitre>
+      <id>T1098.004</id>
+    </mitre>
+    <group>syscheck,ssh,</group>
+  </rule>
+
+  <!-- Cambios en firewall -->
+  <rule id="100023" level="10">
+    <if_sid>550</if_sid>
+    <match>/etc/ufw|/etc/iptables</match>
+    <description>Wazuh: Cambio en configuración de firewall</description>
+    <mitre>
+      <id>T1562.004</id>
+    </mitre>
+    <group>syscheck,firewall,</group>
+  </rule>
+
+</group>
+RULES
+
+# Reiniciar Wazuh Manager para aplicar reglas
+echo "[$(date)] Reiniciando Wazuh Manager para aplicar reglas..." >> /tmp/user-data.log
+systemctl restart wazuh-manager
+
 echo "Wazuh SIEM instalado - Password en /root/wazuh-password.txt" > /tmp/user-data-completed.log
+echo "Reglas personalizadas aplicadas en /var/ossec/etc/rules/local_rules.xml" >> /tmp/user-data-completed.log
 date >> /tmp/user-data-completed.log
