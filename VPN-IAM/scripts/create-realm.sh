@@ -1,24 +1,58 @@
 #!/bin/bash
 # create-fosil-realm.sh
 # Crear y configurar el realm de Fósil Energías Renovables
+# Con roles específicos para VPN con políticas granulares
 
 set -e
 
 KC_CLI="/opt/keycloak/bin/kcadm.sh"
-SERVER="http://10.0.1.30:8080"
+SERVER="http://localhost:8080"
+REALM="fosil"
 
-echo "[+] Configurando realm fosil-energias"
+echo "╔═══════════════════════════════════════════════════════════╗"
+echo "║  Keycloak Realm Setup - Fósil Energías Renovables        ║"
+echo "╚═══════════════════════════════════════════════════════════╝"
+echo ""
+
+# Verificar que Keycloak esté corriendo
+if ! curl -s "$SERVER" > /dev/null; then
+    echo "❌ ERROR: Keycloak no está accesible en $SERVER"
+    echo "   Verificar: sudo systemctl status keycloak"
+    exit 1
+fi
+
+echo "✅ Keycloak accesible en $SERVER"
+echo ""
 
 # Autenticar
+echo "[1/6] Autenticando en Keycloak..."
 sudo -u keycloak $KC_CLI config credentials \
     --server $SERVER \
     --realm master \
     --user admin \
     --password admin
 
+echo "✅ Autenticación exitosa"
+echo ""
+
+# Verificar si el realm ya existe
+if sudo -u keycloak $KC_CLI get realms/$REALM &> /dev/null; then
+    echo "⚠️  El realm '$REALM' ya existe"
+    read -p "¿Deseas eliminarlo y recrearlo? (s/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Ss]$ ]]; then
+        echo "[+] Eliminando realm existente..."
+        sudo -u keycloak $KC_CLI delete realms/$REALM
+        echo "✅ Realm eliminado"
+    else
+        echo "ℹ️  Manteniendo realm existente. Solo se crearán roles y usuarios faltantes."
+    fi
+fi
+
 # Crear realm
-echo "[+] Creando realm..."
-sudo -u keycloak $KC_CLI create realms -s realm=fosil-energias \
+echo ""
+echo "[2/6] Creando/Actualizando realm '$REALM'..."
+sudo -u keycloak $KC_CLI create realms -s realm=$REALM \
     -s enabled=true \
     -s registrationAllowed=false \
     -s resetPasswordAllowed=true \
@@ -27,71 +61,164 @@ sudo -u keycloak $KC_CLI create realms -s realm=fosil-energias \
     -s duplicateEmailsAllowed=false \
     -s sslRequired=NONE \
     -s 'displayName=Fósil Energías Renovables' \
-    -s 'displayNameHtml=<b>Fósil Energías Renovables S.A.</b>'
+    -s 'displayNameHtml=<b>Fósil Energías Renovables S.A.</b>' \
+    2>/dev/null || echo "ℹ️  Realm ya existe, continuando..."
 
 # Configurar políticas de password
-sudo -u keycloak $KC_CLI update realms/fosil-energias -s 'passwordPolicy=length(8) and digits(1) and lowerCase(1) and upperCase(1) and specialChars(1) and notUsername(undefined)'
+echo "[+] Configurando políticas de contraseña..."
+sudo -u keycloak $KC_CLI update realms/$REALM \
+    -s 'passwordPolicy=length(8) and digits(1) and lowerCase(1) and upperCase(1) and specialChars(1) and notUsername(undefined)'
 
-# Crear roles
-echo "[+] Creando roles..."
-sudo -u keycloak $KC_CLI create roles -r fosil-energias -s name=admin-sistemas -s 'description=Administradores de Sistemas'
-sudo -u keycloak $KC_CLI create roles -r fosil-energias -s name=admin-redes -s 'description=Administradores de Redes'
-sudo -u keycloak $KC_CLI create roles -r fosil-energias -s name=operador-telemetria -s 'description=Operadores de Telemetría'
-sudo -u keycloak $KC_CLI create roles -r fosil-energias -s name=auditor -s 'description=Auditores de Seguridad'
+# Habilitar event logging (para analítica de comportamiento)
+echo "[+] Habilitando event logging..."
+sudo -u keycloak $KC_CLI update events/config -r $REALM \
+    -s eventsEnabled=true \
+    -s 'eventsListeners=["jboss-logging","file"]' \
+    -s adminEventsEnabled=true \
+    -s adminEventsDetailsEnabled=true \
+    -s 'enabledEventTypes=["LOGIN","LOGIN_ERROR","LOGOUT","REGISTER","UPDATE_PASSWORD","UPDATE_PROFILE","SEND_RESET_PASSWORD"]' \
+    2>/dev/null || echo "ℹ️  Event config ya aplicado"
+
+echo "✅ Realm configurado"
+echo ""
+
+# Crear roles específicos para VPN
+echo "[3/6] Creando roles para políticas de VPN..."
+
+# Rol 1: Infraestructura Admin (acceso completo)
+sudo -u keycloak $KC_CLI create roles -r $REALM \
+    -s name=infraestructura-admin \
+    -s 'description=Administradores de Infraestructura - Acceso completo VPN a toda la VPC (10.0.1.0/24)' \
+    2>/dev/null || echo "ℹ️  Rol 'infraestructura-admin' ya existe"
+
+# Rol 2: DevOps (acceso a SIEM y WAF)
+sudo -u keycloak $KC_CLI create roles -r $REALM \
+    -s name=devops \
+    -s 'description=DevOps - Acceso VPN a Wazuh SIEM (10.0.1.20) y WAF/Kong (10.0.1.10)' \
+    2>/dev/null || echo "ℹ️  Rol 'devops' ya existe"
+
+# Rol 3: Viewer (solo lectura SIEM)
+sudo -u keycloak $KC_CLI create roles -r $REALM \
+    -s name=viewer \
+    -s 'description=Viewer - Acceso VPN de solo lectura a Wazuh Dashboard (10.0.1.20)' \
+    2>/dev/null || echo "ℹ️  Rol 'viewer' ya existe"
+
+# Roles adicionales para contexto empresarial
+sudo -u keycloak $KC_CLI create roles -r $REALM \
+    -s name=operador-telemetria \
+    -s 'description=Operadores de Telemetría IoT - Acceso a APIs de telemetría' \
+    2>/dev/null || echo "ℹ️  Rol 'operador-telemetria' ya existe"
+
+sudo -u keycloak $KC_CLI create roles -r $REALM \
+    -s name=auditor \
+    -s 'description=Auditores de Seguridad - Acceso de solo lectura a logs' \
+    2>/dev/null || echo "ℹ️  Rol 'auditor' ya existe"
+
+echo "✅ Roles creados"
+echo ""
 
 # Crear usuarios de prueba
-echo "[+] Creando usuarios de prueba..."
+echo "[4/6] Creando usuarios de prueba..."
 
-# Admin de Sistemas
-ADMIN_SYS_ID=$(sudo -u keycloak $KC_CLI create users -r fosil-energias \
-    -s username=admin.sistemas \
-    -s email=admin.sistemas@fosil.uy \
-    -s firstName=Admin \
-    -s lastName=Sistemas \
-    -s enabled=true \
-    -i)
-sudo -u keycloak $KC_CLI set-password -r fosil-energias --username admin.sistemas --new-password Admin123!
-sudo -u keycloak $KC_CLI add-roles -r fosil-energias --uusername admin.sistemas --rolename admin-sistemas
+# Función helper para crear usuario
+create_user() {
+    local username=$1
+    local email=$2
+    local firstname=$3
+    local lastname=$4
+    local role=$5
+    local password=$6
 
-# Admin de Redes
-ADMIN_RED_ID=$(sudo -u keycloak $KC_CLI create users -r fosil-energias \
-    -s username=admin.redes \
-    -s email=admin.redes@fosil.uy \
-    -s firstName=Admin \
-    -s lastName=Redes \
-    -s enabled=true \
-    -i)
-sudo -u keycloak $KC_CLI set-password -r fosil-energias --username admin.redes --new-password Redes123!
-sudo -u keycloak $KC_CLI add-roles -r fosil-energias --uusername admin.redes --rolename admin-redes
+    echo "[+] Creando usuario: $username ($role)"
 
-# Operador Telemetría
-OPE_TEL_ID=$(sudo -u keycloak $KC_CLI create users -r fosil-energias \
-    -s username=operador.telemetria \
-    -s email=operador@fosil.uy \
-    -s firstName=Operador \
-    -s lastName=Telemetría \
-    -s enabled=true \
-    -i)
-sudo -u keycloak $KC_CLI set-password -r fosil-energias --username operador.telemetria --new-password Oper123!
-sudo -u keycloak $KC_CLI add-roles -r fosil-energias --uusername operador.telemetria --rolename operador-telemetria
+    # Crear usuario
+    USER_ID=$(sudo -u keycloak $KC_CLI create users -r $REALM \
+        -s username=$username \
+        -s email=$email \
+        -s firstName="$firstname" \
+        -s lastName="$lastname" \
+        -s enabled=true \
+        -s emailVerified=true \
+        -i 2>/dev/null) || {
+        echo "    ℹ️  Usuario ya existe, obteniendo ID..."
+        USER_ID=$(sudo -u keycloak $KC_CLI get users -r $REALM -q username=$username --fields id | jq -r '.[0].id')
+    }
 
-# Auditor
-AUDITOR_ID=$(sudo -u keycloak $KC_CLI create users -r fosil-energias \
-    -s username=auditor.seguridad \
-    -s email=auditor@fosil.uy \
-    -s firstName=Auditor \
-    -s lastName=Seguridad \
-    -s enabled=true \
-    -i)
-sudo -u keycloak $KC_CLI set-password -r fosil-energias --username auditor.seguridad --new-password Audit123!
-sudo -u keycloak $KC_CLI add-roles -r fosil-energias --uusername auditor.seguridad --rolename auditor
+    if [ -z "$USER_ID" ] || [ "$USER_ID" = "null" ]; then
+        echo "    ❌ Error obteniendo ID del usuario"
+        return 1
+    fi
 
-# ============ CLIENTES OAUTH2/OIDC ============
+    # Establecer contraseña
+    sudo -u keycloak $KC_CLI set-password -r $REALM \
+        --username $username \
+        --new-password "$password" \
+        2>/dev/null || echo "    ℹ️  Contraseña ya establecida"
 
-echo "[+] Creando clientes OAuth2/OIDC..."
+    # Asignar rol
+    sudo -u keycloak $KC_CLI add-roles -r $REALM \
+        --uusername $username \
+        --rolename $role \
+        2>/dev/null || echo "    ℹ️  Rol ya asignado"
+
+    echo "    ✅ Usuario $username creado/actualizado"
+}
+
+# Usuario 1: Administrador de Infraestructura
+create_user \
+    "jperez" \
+    "jperez@fosil.uy" \
+    "Juan" \
+    "Pérez" \
+    "infraestructura-admin" \
+    "Admin123!"
+
+# Usuario 2: DevOps
+create_user \
+    "mgonzalez" \
+    "mgonzalez@fosil.uy" \
+    "María" \
+    "González" \
+    "devops" \
+    "DevOps123!"
+
+# Usuario 3: Viewer
+create_user \
+    "arodriguez" \
+    "arodriguez@fosil.uy" \
+    "Ana" \
+    "Rodríguez" \
+    "viewer" \
+    "Viewer123!"
+
+# Usuario 4: Operador Telemetría
+create_user \
+    "cmartinez" \
+    "cmartinez@fosil.uy" \
+    "Carlos" \
+    "Martínez" \
+    "operador-telemetria" \
+    "Telemetria123!"
+
+# Usuario 5: Auditor
+create_user \
+    "lsanchez" \
+    "lsanchez@fosil.uy" \
+    "Laura" \
+    "Sánchez" \
+    "auditor" \
+    "Auditor123!"
+
+echo ""
+echo "✅ Usuarios creados"
+echo ""
+
+# Crear clientes OAuth2/OIDC
+echo "[5/6] Creando clientes OAuth2/OIDC..."
 
 # Cliente: Kong API Gateway
-KONG_CLIENT_ID=$(sudo -u keycloak $KC_CLI create clients -r fosil-energias \
+echo "[+] Cliente: Kong API Gateway"
+sudo -u keycloak $KC_CLI create clients -r $REALM \
     -s clientId=kong-api \
     -s 'name=Kong API Gateway' \
     -s enabled=true \
@@ -99,20 +226,17 @@ KONG_CLIENT_ID=$(sudo -u keycloak $KC_CLI create clients -r fosil-energias \
     -s secret=kong-secret-2024 \
     -s publicClient=false \
     -s protocol=openid-connect \
-    -s 'redirectUris=["http://10.0.1.10:8000/*","http://10.0.1.10:8443/*"]' \
+    -s 'redirectUris=["http://10.0.1.10:8000/*","http://10.0.1.10:8443/*","https://10.0.1.10:8443/*"]' \
     -s 'webOrigins=["*"]' \
     -s directAccessGrantsEnabled=true \
     -s serviceAccountsEnabled=true \
-    -s authorizationServicesEnabled=true \
     -s standardFlowEnabled=true \
     -s implicitFlowEnabled=false \
-    -s 'defaultClientScopes=["profile","email","roles"]' \
-    -i)
+    2>/dev/null || echo "ℹ️  Cliente 'kong-api' ya existe"
 
-echo "Kong Client ID: $KONG_CLIENT_ID"
-
-# Cliente: Wazuh Dashboard
-WAZUH_CLIENT_ID=$(sudo -u keycloak $KC_CLI create clients -r fosil-energias \
+# Cliente: Wazuh Dashboard (opcional para futuras integraciones)
+echo "[+] Cliente: Wazuh Dashboard"
+sudo -u keycloak $KC_CLI create clients -r $REALM \
     -s clientId=wazuh-dashboard \
     -s 'name=Wazuh Dashboard' \
     -s enabled=true \
@@ -123,57 +247,51 @@ WAZUH_CLIENT_ID=$(sudo -u keycloak $KC_CLI create clients -r fosil-energias \
     -s 'redirectUris=["https://10.0.1.20/*"]' \
     -s 'webOrigins=["*"]' \
     -s standardFlowEnabled=true \
-    -s 'defaultClientScopes=["profile","email","roles"]' \
-    -i)
+    2>/dev/null || echo "ℹ️  Cliente 'wazuh-dashboard' ya existe"
 
-echo "Wazuh Client ID: $WAZUH_CLIENT_ID"
-
-# Cliente: OpenVPN
-OPENVPN_CLIENT_ID=$(sudo -u keycloak $KC_CLI create clients -r fosil-energias \
-    -s clientId=openvpn \
-    -s 'name=OpenVPN Access Server' \
-    -s enabled=true \
-    -s publicClient=false \
-    -s protocol=openid-connect \
-    -s 'redirectUris=["https://10.0.1.30:943/*"]' \
-    -s standardFlowEnabled=true \
-    -s 'defaultClientScopes=["profile","email","roles"]' \
-    -i)
-
-echo "OpenVPN Client ID: $OPENVPN_CLIENT_ID"
-
-# ============ EVENTOS PARA WAZUH ============
-
-echo "[+] Configurando eventos para SIEM..."
-
-# Habilitar todos los eventos
-sudo -u keycloak $KC_CLI update events/config -r fosil-energias \
-    -s eventsEnabled=true \
-    -s eventsListeners='["jboss-logging"]' \
-    -s 'enabledEventTypes=["LOGIN","LOGIN_ERROR","LOGOUT","REGISTER","REMOVE_TOTP","UPDATE_PASSWORD","UPDATE_PROFILE"]'
-
-# Guardar eventos de admin
-sudo -u keycloak $KC_CLI update events/config -r fosil-energias \
-    -s adminEventsEnabled=true \
-    -s adminEventsDetailsEnabled=true
-
-echo "[✓] Realm configurado correctamente"
+echo "✅ Clientes OAuth2 creados"
 echo ""
-echo "=== RESUMEN DE CONFIGURACIÓN ==="
+
+# Resumen final
+echo "[6/6] Configuración completada"
 echo ""
-echo "Realm: fosil-energias"
-echo "URL: http://10.0.1.30:8080/realms/fosil-energias"
+echo "╔═══════════════════════════════════════════════════════════╗"
+echo "║  ✅ REALM CONFIGURADO EXITOSAMENTE                        ║"
+echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
-echo "Usuarios creados:"
-echo "  - admin.sistemas / Admin123!"
-echo "  - admin.redes / Redes123!"
-echo "  - operador.telemetria / Oper123!"
-echo "  - auditor.seguridad / Audit123!"
+echo "📋 RESUMEN DE CONFIGURACIÓN"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Clientes OAuth2:"
-echo "  - kong-api (secret: kong-secret-2024)"
-echo "  - wazuh-dashboard (secret: wazuh-secret-2024)"
-echo "  - openvpn"
+echo "🔗 Realm: $REALM"
+echo "🌐 URL: $SERVER/realms/$REALM"
 echo ""
-echo "Exportar realm:"
-echo "  sudo -u keycloak /opt/keycloak/bin/kc.sh export --realm fosil-energias --file /tmp/fosil-realm.json"
+echo "👥 USUARIOS CREADOS:"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  1. jperez@fosil.uy         | Admin123!        | infraestructura-admin"
+echo "  2. mgonzalez@fosil.uy      | DevOps123!       | devops"
+echo "  3. arodriguez@fosil.uy     | Viewer123!       | viewer"
+echo "  4. cmartinez@fosil.uy      | Telemetria123!   | operador-telemetria"
+echo "  5. lsanchez@fosil.uy       | Auditor123!      | auditor"
+echo ""
+echo "🔑 CLIENTES OAUTH2/OIDC:"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  - kong-api         | Secret: kong-secret-2024"
+echo "  - wazuh-dashboard  | Secret: wazuh-secret-2024"
+echo ""
+echo "📊 EVENT LOGGING:"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  ✅ Eventos habilitados (LOGIN, LOGIN_ERROR, LOGOUT, etc.)"
+echo "  ✅ Eventos de admin habilitados"
+echo "  ℹ️  Configurar logs → Wazuh para analítica de comportamiento"
+echo ""
+echo "🔧 PRÓXIMOS PASOS:"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  1. Configurar event logging → Wazuh SIEM"
+echo "  2. Integrar Kong con OIDC plugin"
+echo "  3. Generar configs VPN con: ./vpn-config-generator.sh <email>"
+echo ""
+echo "💡 GENERAR CONFIG VPN EJEMPLO:"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  export VPN_SERVER_PUBLIC_IP=\$(terraform output -raw vpn_public_ip)"
+echo "  ./vpn-config-generator.sh jperez@fosil.uy"
+echo ""
