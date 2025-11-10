@@ -38,6 +38,68 @@
 
 </group>
 
+<group name="local,web,attack,">
+
+  <!-- CASO 2: Ataques Web (OWASP Top 10) via ModSecurity/Kong -->
+
+  <!-- SQL Injection detectado por ModSecurity -->
+  <rule id="100010" level="10">
+    <if_sid>31100</if_sid>
+    <match>sql|union|select|insert|drop|delete|update</match>
+    <description>Kong: Intento de SQL Injection detectado</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>web_attack,sql_injection,</group>
+  </rule>
+
+  <!-- XSS detectado -->
+  <rule id="100011" level="10">
+    <if_sid>31100</if_sid>
+    <match>script|onerror|onload|alert\(|eval\(|javascript:</match>
+    <description>Kong: Intento de XSS (Cross-Site Scripting) detectado</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>web_attack,xss,</group>
+  </rule>
+
+  <!-- RCE (Remote Code Execution) -->
+  <rule id="100012" level="12">
+    <if_sid>31100</if_sid>
+    <match>exec|system|passthru|shell_exec|/bin/bash|/bin/sh</match>
+    <description>Kong: Intento CRÍTICO de RCE (Remote Code Execution)</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>web_attack,rce,</group>
+  </rule>
+
+  <!-- Path Traversal / LFI -->
+  <rule id="100013" level="10">
+    <if_sid>31100</if_sid>
+    <match>\.\.\/|\.\.\\|etc/passwd|boot\.ini</match>
+    <description>Kong: Intento de Path Traversal detectado</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>web_attack,path_traversal,</group>
+  </rule>
+
+  <!-- Múltiples ataques web desde misma IP -->
+  <rule id="100014" level="12" frequency="10" timeframe="300">
+    <if_matched_sid>100010</if_matched_sid>
+    <same_source_ip />
+    <description>Kong: Múltiples ataques web desde la misma IP (posible escaneo)</description>
+    <mitre>
+      <id>T1190</id>
+      <id>T1595</id>
+    </mitre>
+    <group>web_attack,reconnaissance,</group>
+  </rule>
+
+</group>
+
 <group name="local,syscheck,">
 
   <!-- CASO 3: File Integrity Monitoring -->
@@ -84,6 +146,45 @@
       <id>T1562.004</id>
     </mitre>
     <group>syscheck,firewall,</group>
+  </rule>
+
+</group>
+
+<group name="local,keycloak,iam,">
+
+  <!-- CASO 4: Analítica de Comportamiento IAM (Keycloak) -->
+
+  <!-- Login fallido en Keycloak -->
+  <rule id="100040" level="5">
+    <decoded_as>json</decoded_as>
+    <field name="type">LOGIN_ERROR</field>
+    <description>Keycloak: Intento de login fallido</description>
+  </rule>
+
+  <!-- Múltiples login fallidos (brute force) -->
+  <rule id="100041" level="10" frequency="5" timeframe="300">
+    <if_matched_sid>100040</if_matched_sid>
+    <description>Keycloak: Múltiples intentos de login fallidos (brute force)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!-- Login desde IP externa -->
+  <rule id="100042" level="8">
+    <if_sid>100040</if_sid>
+    <field name="ipAddress">!^10\.0\.</field>
+    <description>Keycloak: Login desde IP externa (no VPC)</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+
+  <!-- Login fuera de horario laboral -->
+  <rule id="100043" level="7">
+    <if_sid>100040</if_sid>
+    <time>6 pm - 9 am</time>
+    <description>Keycloak: Login fuera de horario laboral</description>
   </rule>
 
 </group>
