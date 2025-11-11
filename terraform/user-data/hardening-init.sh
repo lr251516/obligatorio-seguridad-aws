@@ -1,13 +1,24 @@
 #!/bin/bash
 set -e
 export DEBIAN_FRONTEND=noninteractive
+exec > >(tee /tmp/user-data.log) 2>&1
+
 apt-get update
 apt-get upgrade -y
 apt-get install -y git curl auditd aide ufw fail2ban unattended-upgrades
 
 hostnamectl set-hostname hardening-vm
 mkdir -p /opt/fosil/scripts
-cd /opt && git clone https://github.com/lr251516/obligatorio-srd-aws.git fosil || (cd fosil && git pull)
+
+# Clonar repo
+cd /opt
+if [ -d "fosil" ]; then
+  cd fosil && git pull origin main || true
+else
+  git clone https://github.com/lr251516/obligatorio-seguridad-aws.git fosil || true
+  cd fosil
+fi
+chown -R ubuntu:ubuntu /opt/fosil
 
 # Habilitar servicios de seguridad
 systemctl enable auditd

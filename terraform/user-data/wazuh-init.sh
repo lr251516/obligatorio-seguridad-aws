@@ -215,6 +215,15 @@ RULES
 echo "[$(date)] Reiniciando Wazuh Manager para aplicar reglas..." >> /tmp/user-data.log
 systemctl restart wazuh-manager
 
+# Clonar repositorio
+echo "[$(date)] Clonando repositorio..." >> /tmp/user-data.log
+cd /opt
+git clone https://github.com/lr251516/obligatorio-srd-aws.git fosil || true
+cd fosil
+git pull origin main || true
+chown -R ubuntu:ubuntu /opt/fosil
+
 echo "Wazuh SIEM instalado - Password en /root/wazuh-password.txt" > /tmp/user-data-completed.log
 echo "Reglas personalizadas aplicadas en /var/ossec/etc/rules/local_rules.xml" >> /tmp/user-data-completed.log
+echo "Repositorio clonado en /opt/fosil" >> /tmp/user-data-completed.log
 date >> /tmp/user-data-completed.log

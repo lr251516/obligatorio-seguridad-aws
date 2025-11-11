@@ -8,7 +8,16 @@ apt-get update && apt-get upgrade -y
 apt-get install -y git curl wget apt-transport-https lsb-release gnupg2 build-essential libpcre3-dev zlib1g-dev libssl-dev libgeoip-dev libgd-dev libxml2-dev libyajl-dev automake libtool pkg-config postgresql postgresql-contrib libmodsecurity3 libmodsecurity-dev
 hostnamectl set-hostname waf-kong
 mkdir -p /opt/fosil/scripts
-cd /opt && git clone https://github.com/lr251516/obligatorio-srd-aws.git fosil || (cd fosil && git pull)
+
+# Clonar repo
+cd /opt
+if [ -d "fosil" ]; then
+  cd fosil && git pull origin main || true
+else
+  git clone https://github.com/lr251516/obligatorio-seguridad-aws.git fosil || true
+  cd fosil
+fi
+chown -R ubuntu:ubuntu /opt/fosil
 cat >> /etc/hosts <<H
 10.0.1.10 waf-kong waf
 10.0.1.20 wazuh-siem wazuh

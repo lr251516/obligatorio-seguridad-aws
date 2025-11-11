@@ -85,16 +85,16 @@ ListenPort = 51820
 # Clave privada
 PrivateKey = $PRIVATE_KEY
 
-# Habilitar IP forwarding y NAT
+# Habilitar IP forwarding y NAT (AWS usa ens5)
 PostUp = sysctl -w net.ipv4.ip_forward=1
 PostUp = iptables -A FORWARD -i wg0 -j ACCEPT
 PostUp = iptables -A FORWARD -o wg0 -j ACCEPT
-PostUp = iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+PostUp = iptables -t nat -A POSTROUTING -o ens5 -j MASQUERADE
 PostUp = iptables -A INPUT -p udp --dport 51820 -j ACCEPT
 
 PostDown = iptables -D FORWARD -i wg0 -j ACCEPT
 PostDown = iptables -D FORWARD -o wg0 -j ACCEPT
-PostDown = iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+PostDown = iptables -t nat -D POSTROUTING -o ens5 -j MASQUERADE
 PostDown = iptables -D INPUT -p udp --dport 51820 -j ACCEPT
 
 # Peer: VM4 (cliente)
