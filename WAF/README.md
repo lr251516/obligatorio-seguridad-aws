@@ -1,21 +1,39 @@
 # WAF + API Gateway (Kong)
 
-## Componentes
+## 🎯 Descripción
+
+Kong Gateway + ModSecurity WAF con OWASP Core Rule Set desplegado automáticamente.
+
+**Deployment:** automatizado via `terraform/user-data/waf-init.sh`
+
+## ✅ Instalado Automáticamente
+
+- ✅ Kong Gateway 3.4 con PostgreSQL
+- ✅ Nginx compilado con ModSecurity 3
+- ✅ OWASP Core Rule Set (CRS)
+- ✅ 6 reglas WAF personalizadas
+- ✅ Wazuh agent con FIM en `/etc/kong` y `/etc/nginx`
+- ✅ Logs integrados con Wazuh SIEM
+
+## 🛡️ Componentes
 
 - **Kong Gateway 3.4.1**: API Gateway y reverse proxy
 - **ModSecurity 3**: Web Application Firewall
-- **OWASP CRS**: Core Rule Set
+- **OWASP CRS**: Core Rule Set (protección OWASP Top 10)
 - **Reglas personalizadas**: 6 reglas custom para Fósil Energías
 
-## Instalación
+## 🔍 Verificación
 
 ```bash
-cd WAF/scripts
-chmod +x install-kong.sh
-sudo ./install-kong.sh
-```
+# Verificar servicios
+ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw waf_public_ip)
+systemctl status kong
+systemctl status nginx
 
-Instala PostgreSQL, Kong Gateway, ModSecurity, OWASP CRS e integración con Keycloak.
+# Ver logs
+tail -f /var/log/nginx/modsec_audit.log
+tail -f /var/log/kong/access.log
+```
 
 ## Reglas Personalizadas
 

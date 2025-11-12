@@ -1,6 +1,21 @@
 # Hardening con SCA
 
-## Componentes
+## 🎯 Descripción
+
+VM Ubuntu 22.04 hardenizada según CIS Benchmark Level 1 con Security Configuration Assessment automático.
+
+**Deployment:** Wazuh agent + FIM automatizado via `terraform/user-data/hardening-init.sh`
+
+## ✅ Instalado Automáticamente
+
+- ✅ Wazuh Agent con FIM configurado
+- ✅ auditd (auditoría del sistema)
+- ✅ fail2ban (protección brute force)
+- ✅ UFW firewall configurado
+- ✅ unattended-upgrades (actualizaciones automáticas)
+- ✅ FIM en archivos críticos: `/etc/passwd`, `/etc/shadow`, `/etc/sudoers`, `/etc/ssh/sshd_config`
+
+## 🔧 Componentes
 
 - Ubuntu 22.04 LTS hardened
 - CIS Benchmarks Level 1
@@ -8,17 +23,17 @@
 - Auditoría con auditd
 - Firewall UFW + Fail2ban
 
-## Aplicar Hardening
+## 🔨 Aplicar Hardening CIS (Opcional)
+
+**El script está listo pero debe ejecutarse manualmente:**
 
 ```bash
-ssh -i ~/.ssh/obligatorio-srd ubuntu@10.0.1.40
+ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw hardening_public_ip)
 cd /opt/fosil/Hardening/scripts
 chmod +x apply-cis-hardening.sh
 sudo ./apply-cis-hardening.sh
 sudo reboot
 ```
-
-El agente Wazuh con FIM se instala automáticamente via user-data.
 
 ## Ver Score en Dashboard
 
