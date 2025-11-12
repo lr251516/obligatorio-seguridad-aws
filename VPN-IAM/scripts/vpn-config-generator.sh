@@ -87,9 +87,8 @@ CONFIG_FILE="${OUTPUT_DIR}/${USERNAME}-${USER_ROLE}.conf"
 # Generar config
 cat > "$CONFIG_FILE" <<EOF
 [Interface]
-Address = ${CLIENT_VPN_IP}/24
+Address = ${CLIENT_VPN_IP}/32
 PrivateKey = ${PRIVATE_KEY}
-DNS = 10.0.1.20
 
 [Peer]
 PublicKey = ${VPN_SERVER_PUBLIC_KEY}
@@ -98,12 +97,25 @@ Endpoint = ${VPN_SERVER_PUBLIC_IP}:51820
 PersistentKeepalive = 25
 EOF
 
-# Agregar peer al servidor
-if [ -f "/etc/wireguard/wg0.conf" ]; then
-    sudo wg set wg0 peer "$PUBLIC_KEY" allowed-ips "$CLIENT_VPN_IP/32" 2>/dev/null || true
+# Agregar peer al servidor (si WireGuard está corriendo)
+if systemctl is-active --quiet wg-quick@wg0 2>/dev/null; then
+    echo "[+] Agregando peer al servidor VPN..."
+    sudo wg set wg0 peer "$PUBLIC_KEY" allowed-ips "$CLIENT_VPN_IP/32"
+
+    # Persistir configuración agregando peer al archivo
+    if ! sudo grep -q "$PUBLIC_KEY" /etc/wireguard/wg0.conf; then
+        echo "" | sudo tee -a /etc/wireguard/wg0.conf > /dev/null
+        echo "# Cliente: $USER_EMAIL ($USER_ROLE)" | sudo tee -a /etc/wireguard/wg0.conf > /dev/null
+        echo "[Peer]" | sudo tee -a /etc/wireguard/wg0.conf > /dev/null
+        echo "PublicKey = $PUBLIC_KEY" | sudo tee -a /etc/wireguard/wg0.conf > /dev/null
+        echo "AllowedIPs = $CLIENT_VPN_IP/32" | sudo tee -a /etc/wireguard/wg0.conf > /dev/null
+    fi
+else
+    echo "[!] WireGuard no está corriendo. Configurar servidor primero:"
+    echo "    sudo /opt/fosil/VPN-IAM/scripts/setup-vpn-server.sh"
 fi
 
-echo "✅ Config generada: $CONFIG_FILE"
+echo "[OK] Config generada: $CONFIG_FILE"
 echo "   Usuario: $USER_EMAIL"
 echo "   Rol: $USER_ROLE"
 echo "   IP VPN: $CLIENT_VPN_IP"

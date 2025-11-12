@@ -9,19 +9,19 @@ KC_CLI="/opt/keycloak/bin/kcadm.sh"
 SERVER="http://localhost:8080"
 REALM="fosil"
 
-echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║  Keycloak Realm Setup - Fósil Energías Renovables        ║"
-echo "╚═══════════════════════════════════════════════════════════╝"
+echo ""
+echo "  Keycloak Realm Setup - Fósil Energías Renovables        "
+echo ""
 echo ""
 
 # Verificar que Keycloak esté corriendo
 if ! curl -s "$SERVER" > /dev/null; then
-    echo "❌ ERROR: Keycloak no está accesible en $SERVER"
+    echo "[ERROR] ERROR: Keycloak no está accesible en $SERVER"
     echo "   Verificar: sudo systemctl status keycloak"
     exit 1
 fi
 
-echo "✅ Keycloak accesible en $SERVER"
+echo "[OK] Keycloak accesible en $SERVER"
 echo ""
 
 # Autenticar
@@ -32,18 +32,18 @@ sudo -u keycloak $KC_CLI config credentials \
     --user admin \
     --password admin
 
-echo "✅ Autenticación exitosa"
+echo "[OK] Autenticación exitosa"
 echo ""
 
 # Verificar si el realm ya existe
 if sudo -u keycloak $KC_CLI get realms/$REALM &> /dev/null; then
-    echo "⚠️  El realm '$REALM' ya existe"
+    echo "[WARN]  El realm '$REALM' ya existe"
     read -p "¿Deseas eliminarlo y recrearlo? (s/N): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Ss]$ ]]; then
         echo "[+] Eliminando realm existente..."
         sudo -u keycloak $KC_CLI delete realms/$REALM
-        echo "✅ Realm eliminado"
+        echo "[OK] Realm eliminado"
     else
         echo "ℹ️  Manteniendo realm existente. Solo se crearán roles y usuarios faltantes."
     fi
@@ -79,7 +79,7 @@ sudo -u keycloak $KC_CLI update events/config -r $REALM \
     -s 'enabledEventTypes=["LOGIN","LOGIN_ERROR","LOGOUT","REGISTER","UPDATE_PASSWORD","UPDATE_PROFILE","SEND_RESET_PASSWORD"]' \
     2>/dev/null || echo "ℹ️  Event config ya aplicado"
 
-echo "✅ Realm configurado"
+echo "[OK] Realm configurado"
 echo ""
 
 # Crear roles específicos para VPN
@@ -114,7 +114,7 @@ sudo -u keycloak $KC_CLI create roles -r $REALM \
     -s 'description=Auditores de Seguridad - Acceso de solo lectura a logs' \
     2>/dev/null || echo "ℹ️  Rol 'auditor' ya existe"
 
-echo "✅ Roles creados"
+echo "[OK] Roles creados"
 echo ""
 
 # Crear usuarios de prueba
@@ -145,7 +145,7 @@ create_user() {
     }
 
     if [ -z "$USER_ID" ] || [ "$USER_ID" = "null" ]; then
-        echo "    ❌ Error obteniendo ID del usuario"
+        echo "    [ERROR] Error obteniendo ID del usuario"
         return 1
     fi
 
@@ -161,7 +161,7 @@ create_user() {
         --rolename $role \
         2>/dev/null || echo "    ℹ️  Rol ya asignado"
 
-    echo "    ✅ Usuario $username creado/actualizado"
+    echo "    [OK] Usuario $username creado/actualizado"
 }
 
 # Usuario 1: Administrador de Infraestructura
@@ -210,7 +210,7 @@ create_user \
     "Auditor123!"
 
 echo ""
-echo "✅ Usuarios creados"
+echo "[OK] Usuarios creados"
 echo ""
 
 # Crear clientes OAuth2/OIDC
@@ -249,24 +249,24 @@ sudo -u keycloak $KC_CLI create clients -r $REALM \
     -s standardFlowEnabled=true \
     2>/dev/null || echo "ℹ️  Cliente 'wazuh-dashboard' ya existe"
 
-echo "✅ Clientes OAuth2 creados"
+echo "[OK] Clientes OAuth2 creados"
 echo ""
 
 # Resumen final
 echo "[6/6] Configuración completada"
 echo ""
-echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║  ✅ REALM CONFIGURADO EXITOSAMENTE                        ║"
-echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
-echo "📋 RESUMEN DE CONFIGURACIÓN"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  [OK] REALM CONFIGURADO EXITOSAMENTE                        "
+echo ""
+echo ""
+echo " RESUMEN DE CONFIGURACIÓN"
+echo ""
 echo ""
 echo "🔗 Realm: $REALM"
 echo "🌐 URL: $SERVER/realms/$REALM"
 echo ""
 echo "👥 USUARIOS CREADOS:"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
 echo "  1. jperez@fosil.uy         | Admin123!        | infraestructura-admin"
 echo "  2. mgonzalez@fosil.uy      | DevOps123!       | devops"
 echo "  3. arodriguez@fosil.uy     | Viewer123!       | viewer"
@@ -274,24 +274,24 @@ echo "  4. cmartinez@fosil.uy      | Telemetria123!   | operador-telemetria"
 echo "  5. lsanchez@fosil.uy       | Auditor123!      | auditor"
 echo ""
 echo "🔑 CLIENTES OAUTH2/OIDC:"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
 echo "  - kong-api         | Secret: kong-secret-2024"
 echo "  - wazuh-dashboard  | Secret: wazuh-secret-2024"
 echo ""
 echo "📊 EVENT LOGGING:"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Eventos habilitados (LOGIN, LOGIN_ERROR, LOGOUT, etc.)"
-echo "  ✅ Eventos de admin habilitados"
+echo ""
+echo "  [OK] Eventos habilitados (LOGIN, LOGIN_ERROR, LOGOUT, etc.)"
+echo "  [OK] Eventos de admin habilitados"
 echo "  ℹ️  Configurar logs → Wazuh para analítica de comportamiento"
 echo ""
-echo "🔧 PRÓXIMOS PASOS:"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo " PRÓXIMOS PASOS:"
+echo ""
 echo "  1. Configurar event logging → Wazuh SIEM"
 echo "  2. Integrar Kong con OIDC plugin"
 echo "  3. Generar configs VPN con: ./vpn-config-generator.sh <email>"
 echo ""
-echo "💡 GENERAR CONFIG VPN EJEMPLO:"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo " GENERAR CONFIG VPN EJEMPLO:"
+echo ""
 echo "  export VPN_SERVER_PUBLIC_IP=\$(terraform output -raw vpn_public_ip)"
 echo "  ./vpn-config-generator.sh jperez@fosil.uy"
 echo ""

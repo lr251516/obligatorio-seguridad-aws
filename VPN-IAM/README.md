@@ -96,16 +96,31 @@ sudo wg show
 
 ### VPN Remote Access (Usuarios → Cloud)
 
-**Descripción:** Generar configuraciones WireGuard personalizadas por rol de usuario Keycloak.
+**Descripción:** Acceso VPN administrativo seguro con políticas granulares basadas en roles de Keycloak (OAuth2/OIDC).
 
-**Script:** `vpn-config-generator.sh` (110 líneas, minimalista)
+**Cumple requisito 1b del obligatorio:** "Políticas granulares de acceso dependiendo de la identidad"
 
-**Uso:**
+#### 1. Configurar Servidor VPN
 
 ```bash
 ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw vpn_public_ip)
 cd /opt/fosil/VPN-IAM/scripts
-chmod +x vpn-config-generator.sh
+chmod +x setup-vpn-server.sh
+sudo ./setup-vpn-server.sh
+```
+
+**Esto configura:**
+- WireGuard listening en puerto 51820
+- Red VPN: 10.0.0.0/24
+- IP forwarding + NAT habilitado
+- Guarda información en `/opt/fosil/vpn-server-info.txt`
+
+#### 2. Generar Configuraciones de Clientes por Rol
+
+```bash
+# Configurar variables de entorno
+export VPN_SERVER_PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+export VPN_SERVER_PUBLIC_KEY=$(sudo cat /etc/wireguard/public.key)
 
 # Generar config para usuario infraestructura-admin
 ./vpn-config-generator.sh jperez@fosil.uy
@@ -127,18 +142,18 @@ chmod +x vpn-config-generator.sh
 | `devops` | `10.0.0.0/24, 10.0.1.20/32, 10.0.1.10/32` | SIEM (10.0.1.20) + WAF (10.0.1.10) |
 | `viewer` | `10.0.0.0/24, 10.0.1.20/32` | Solo SIEM read-only (10.0.1.20) |
 
-**Ejemplo de config generada:**
+**Ejemplo de config generada (rol viewer):**
 
 ```ini
 [Interface]
 PrivateKey = <generada automáticamente>
-Address = 10.0.0.10/24
-DNS = 1.1.1.1
+Address = 10.0.0.12/24
+DNS = 1.1.1.1, 1.0.0.1
 
 [Peer]
 PublicKey = <clave pública servidor VPN>
 Endpoint = <VPN_PUBLIC_IP>:51820
-AllowedIPs = 10.0.0.0/24, 10.0.1.20/32  # Ejemplo rol viewer
+AllowedIPs = 10.0.0.0/24, 10.0.1.20/32  # Solo SIEM (políticas granulares)
 PersistentKeepalive = 25
 ```
 
@@ -256,10 +271,25 @@ sudo iptables -L -v -n
 - `install-keycloak.sh`: Instalación Keycloak (ya ejecutado en deployment)
 - `create-realm.sh`: Crear realm "fosil" con usuarios/roles
 - `setup-wireguard.sh`: Configurar VPN site-to-site
-- `vpn-config-generator.sh`: Generar configs VPN por rol
+- `setup-vpn-server.sh`: Configurar servidor VPN para remote access
+- `vpn-config-generator.sh`: Generar configs VPN personalizadas por rol Keycloak
+
+## 🧪 Testing
+
+Ver documentación completa de testing: [TESTING.md](./TESTING.md)
+
+**Tests implementados:**
+1. Generar configs VPN para 3 roles diferentes
+2. Validar AllowedIPs según rol (políticas granulares)
+3. Conectividad desde laptop con rol admin (full access)
+4. Conectividad con rol devops (solo SIEM + WAF)
+5. Conectividad con rol viewer (solo SIEM read-only)
+6. Verificar peers registrados en servidor
+7. Event logging Keycloak → Wazuh (analítica de comportamiento)
 
 ## 📝 Referencias
 
 - [Keycloak Documentation](https://www.keycloak.org/documentation)
 - [WireGuard Quick Start](https://www.wireguard.com/quickstart/)
 - [OAuth2/OIDC](https://oauth.net/2/)
+- [Testing VPN Remote Access](./TESTING.md)

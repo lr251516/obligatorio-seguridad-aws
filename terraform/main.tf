@@ -47,7 +47,7 @@ resource "aws_internet_gateway" "main" {
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
-  availability_zone       = data.aws_availability_zones.available.names[0]
+  availability_zone       = var.availability_zone != "" ? var.availability_zone : data.aws_availability_zones.available.names[0]
   map_public_ip_on_launch = true
 
   tags = {
@@ -353,7 +353,7 @@ resource "aws_instance" "wazuh" {
 # EC2 Instance - VPN/IAM
 resource "aws_instance" "vpn" {
   ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "c7i-flex.large"  # 4GB RAM para Keycloak (free tier)
+  instance_type          = var.vpn_instance_type
   key_name               = aws_key_pair.deployer.key_name
   subnet_id              = aws_subnet.public.id
   source_dest_check      = false  # Requerido para NAT/routing VPN

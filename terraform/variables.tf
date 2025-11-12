@@ -4,6 +4,12 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "availability_zone" {
+  description = "Specific AZ (try us-east-1b or us-east-1c if fails)"
+  type        = string
+  default     = ""
+}
+
 variable "my_ip" {
   description = "Your public IP address for SSH access (CIDR format)"
   type        = string
@@ -20,6 +26,12 @@ variable "wazuh_instance_type" {
   description = "Instance type for Wazuh"
   type        = string
   default     = "m7i-flex.large"
+}
+
+variable "vpn_instance_type" {
+  description = "Instance type for VPN/IAM"
+  type        = string
+  default     = "c7i-flex.large"
 }
 
 variable "github_repo" {

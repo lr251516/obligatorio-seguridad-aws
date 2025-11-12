@@ -17,6 +17,10 @@ else
 fi
 chown -R ubuntu:ubuntu /opt/fosil
 
+# Permisos ejecutables en scripts
+chmod +x /opt/fosil/VPN-IAM/scripts/*.sh
+chmod +x /opt/fosil/Hardening/scripts/*.sh
+
 # Swap moderado (2GB)
 fallocate -l 2G /swapfile
 chmod 600 /swapfile
@@ -181,6 +185,12 @@ sudo -u keycloak bin/kcadm.sh config credentials \
 
 sudo -u keycloak bin/kcadm.sh update realms/master \
   -s sslRequired=NONE 2>&1 | tee -a /tmp/user-data.log
+
+# Crear realm fosil automáticamente
+echo "[$(date)] Creando realm fosil..." >> /tmp/user-data.log
+sleep 10
+cd /opt/fosil/VPN-IAM/scripts
+sudo -u keycloak /opt/fosil/VPN-IAM/scripts/create-realm.sh 2>&1 | tee -a /tmp/user-data.log || echo "Warning: create-realm.sh falló, ejecutar manualmente" >> /tmp/user-data.log
 
 echo "VPN/IAM init completed with Wazuh agent + Keycloak" > /tmp/user-data-completed.log
 echo "Keycloak: http://10.0.1.30:8080 (admin/admin)" >> /tmp/user-data-completed.log

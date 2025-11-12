@@ -25,9 +25,14 @@ EOF
 # Instalar Kong
 echo "[+] Instalando Kong Gateway..."
 KONG_VERSION="3.4.1"
-curl -Lo kong.deb "https://download.konghq.com/gateway-${KONG_VERSION%%.*}.x-ubuntu-$(lsb_release -cs)/pool/all/k/kong/kong_${KONG_VERSION}_amd64.deb"
-sudo dpkg -i kong.deb
-rm kong.deb
+# Descargar Kong desde el repo oficial
+curl -Lo kong.deb "https://packages.konghq.com/public/gateway-34/deb/ubuntu/pool/jammy/main/k/ko/kong_${KONG_VERSION}/kong_${KONG_VERSION}_amd64.deb"
+sudo dpkg -i kong.deb || {
+    echo "[!] Error instalando Kong, intentando método alternativo..."
+    # Método alternativo: usar el script de instalación oficial
+    curl -sL https://get.konghq.com/install | sudo bash -s -- -v ${KONG_VERSION}
+}
+rm -f kong.deb
 
 # Configurar Kong
 sudo tee /etc/kong/kong.conf > /dev/null <<EOF
