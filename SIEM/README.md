@@ -1,20 +1,16 @@
 # SIEM - Wazuh
 
-## 🎯 Descripción
+Wazuh SIEM desplegado automáticamente con 17 reglas personalizadas para 4 casos de uso.
 
-Wazuh SIEM desplegado automáticamente via Terraform con 17 reglas personalizadas para 4 casos de uso específicos de Fósil Energías Renovables.
+## Instalado Automáticamente
 
-**Deployment:** 100% automatizado via `terraform/user-data/wazuh-init.sh`
+- Wazuh Manager 4.13
+- Wazuh Indexer (OpenSearch)
+- Wazuh Dashboard (HTTPS)
+- 17 reglas custom en `/var/ossec/etc/rules/local_rules.xml`
+- 4 agentes auto-registrados (wazuh-siem, hardening-vm, waf-kong, vpn-iam)
 
-## ✅ Instalado Automáticamente
-
-- ✅ Wazuh Manager 4.13
-- ✅ Wazuh Indexer (OpenSearch)
-- ✅ Wazuh Dashboard (HTTPS)
-- ✅ 17 reglas custom en `/var/ossec/etc/rules/local_rules.xml`
-- ✅ 4 agentes auto-registrados (wazuh-siem, hardening-vm, waf-kong, vpn-iam)
-
-## 🔍 Verificación
+## Verificación
 
 ```bash
 # SSH a VM Wazuh
@@ -35,7 +31,7 @@ sudo tail -f /var/ossec/logs/alerts/alerts.log
 - Usuario: `admin`
 - Password: `sudo cat /root/wazuh-password.txt`
 
-## 📊 Casos de Uso Implementados
+## Casos de Uso Implementados
 
 ### Caso 1: Brute Force Authentication
 
@@ -145,7 +141,7 @@ sudo echo "test_user:x:9999:9999::/tmp:/bin/false" >> /etc/passwd
 
 **Testing:**
 ```bash
-# Keycloak brute force (requiere Keycloak event logging configurado)
+# Keycloak brute force
 # 1. Ir a http://<VPN_IP>:8080/realms/fosil/account
 # 2. Intentar login con password incorrecto 6 veces
 
@@ -159,7 +155,7 @@ sudo echo "test_user:x:9999:9999::/tmp:/bin/false" >> /etc/passwd
 
 ---
 
-## 📁 Archivos de Configuración
+## Archivos de Configuración
 
 ### Reglas Custom
 
@@ -173,9 +169,7 @@ sudo cat /var/ossec/etc/rules/local_rules.xml
 sudo systemctl restart wazuh-manager
 ```
 
-### Agentes
-
-**Configuración FIM por agente:**
+### Agentes FIM
 
 **hardening-vm:**
 ```xml
@@ -196,7 +190,7 @@ sudo systemctl restart wazuh-manager
 <directories check_all="yes" realtime="yes">/opt/keycloak/conf</directories>
 ```
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Agente no aparece conectado
 
@@ -230,7 +224,7 @@ sudo systemctl status wazuh-indexer
 sudo cat /root/wazuh-password.txt
 ```
 
-## 📊 Queries Útiles Dashboard
+## Queries Útiles Dashboard
 
 ```
 # Todas las alertas de nivel alto
@@ -249,15 +243,7 @@ rule.id:(100010 OR 100011 OR 100012)
 rule.id:(100020 OR 100021 OR 100022)
 ```
 
-## 🎯 Próximos Pasos
-
-1. ✅ Verificar que los 4 agentes estén activos
-2. ✅ Testear Caso 3 (FIM) - el más fácil
-3. ✅ Testear Caso 1 (Brute Force SSH)
-4. ✅ Testear Caso 2 (WAF)
-5. ⚠️ Configurar Keycloak event logging para Caso 4
-
-## 📝 Referencias
+## Referencias
 
 - [Wazuh Documentation](https://documentation.wazuh.com/)
 - [Custom Rules](https://documentation.wazuh.com/current/user-manual/ruleset/custom.html)

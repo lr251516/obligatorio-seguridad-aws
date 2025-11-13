@@ -1,28 +1,17 @@
-# WAF + API Gateway (Kong)
+# WAF + API Gateway
 
-## 🎯 Descripción
+Kong Gateway + ModSecurity WAF con OWASP Core Rule Set desplegado automáticamente via `terraform/user-data/waf-init.sh`.
 
-Kong Gateway + ModSecurity WAF con OWASP Core Rule Set desplegado automáticamente.
+## Instalado Automáticamente
 
-**Deployment:** automatizado via `terraform/user-data/waf-init.sh`
+- Kong Gateway 3.4 con PostgreSQL
+- Nginx compilado con ModSecurity 3
+- OWASP Core Rule Set (CRS)
+- 6 reglas WAF personalizadas
+- Wazuh agent con FIM en `/etc/kong` y `/etc/nginx`
+- Logs integrados con Wazuh SIEM
 
-## ✅ Instalado Automáticamente
-
-- ✅ Kong Gateway 3.4 con PostgreSQL
-- ✅ Nginx compilado con ModSecurity 3
-- ✅ OWASP Core Rule Set (CRS)
-- ✅ 6 reglas WAF personalizadas
-- ✅ Wazuh agent con FIM en `/etc/kong` y `/etc/nginx`
-- ✅ Logs integrados con Wazuh SIEM
-
-## 🛡️ Componentes
-
-- **Kong Gateway 3.4.1**: API Gateway y reverse proxy
-- **ModSecurity 3**: Web Application Firewall
-- **OWASP CRS**: Core Rule Set (protección OWASP Top 10)
-- **Reglas personalizadas**: 6 reglas custom para Fósil Energías
-
-## 🔍 Verificación
+## Verificación
 
 ```bash
 # Verificar servicios
@@ -72,14 +61,3 @@ Dashboard > Security Events → Filtrar por `rule.id: 100010-100014` y `agent.na
 ```bash
 sudo tail -f /var/ossec/logs/alerts/alerts.log | grep ModSecurity
 ```
-
-## URLs
-
-- **Proxy HTTP**: `http://10.0.1.10:8000`
-- **Proxy HTTPS**: `https://10.0.1.10:8443`
-- **Admin API**: `http://10.0.1.10:8001` (solo red interna)
-
-## Logs
-
-- Kong Access: `/var/log/kong/access.log`
-- ModSecurity Audit: `/var/log/modsec_audit.log`
