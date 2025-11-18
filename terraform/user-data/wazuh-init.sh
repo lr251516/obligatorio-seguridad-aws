@@ -1,8 +1,17 @@
 #!/bin/bash
 set -e
+
+# Timezone y NTP Uruguay
+timedatectl set-timezone America/Montevideo
+
 apt-get update
 apt-get upgrade -y
-apt-get install -y git curl wget htop
+apt-get install -y git curl wget htop systemd-timesyncd
+
+# Configurar NTP después de asegurar que está instalado
+echo "NTP=0.uy.pool.ntp.org 1.uy.pool.ntp.org" >> /etc/systemd/timesyncd.conf
+systemctl enable systemd-timesyncd
+systemctl restart systemd-timesyncd
 
 hostnamectl set-hostname wazuh-siem
 mkdir -p /opt/fosil/scripts
@@ -65,7 +74,7 @@ cat > /var/ossec/etc/rules/local_rules.xml <<'RULES'
 <group name="local,authentication,">
 
   <!-- CASO 1: Múltiples intentos de autenticación fallidos (SSH) -->
-  <rule id="100001" level="10" frequency="5" timeframe="300">
+  <rule id="100001" level="10" frequency="3" timeframe="120">
     <if_matched_sid>5503</if_matched_sid>
     <description>Wazuh: Múltiples intentos de autenticación SSH fallidos</description>
     <mitre>
@@ -218,9 +227,16 @@ systemctl restart wazuh-manager
 # Clonar repositorio
 echo "[$(date)] Clonando repositorio..." >> /tmp/user-data.log
 cd /opt
-git clone https://github.com/lr251516/obligatorio-srd-aws.git fosil || true
-cd fosil
-git pull origin main || true
+if [ -d "fosil/.git" ]; then
+  echo "Repo already exists, pulling latest changes..."
+  cd fosil
+  git pull origin main
+else
+  echo "Cloning repository..."
+  rm -rf fosil
+  git clone https://github.com/lr251516/obligatorio-seguridad-aws.git fosil
+  cd fosil
+fi
 chown -R ubuntu:ubuntu /opt/fosil
 
 echo "Wazuh SIEM instalado - Password en /root/wazuh-password.txt" > /tmp/user-data-completed.log

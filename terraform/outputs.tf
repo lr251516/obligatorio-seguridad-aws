@@ -48,7 +48,7 @@ output "infrastructure_summary" {
 
   WAF/Kong:     ${aws_eip.waf.public_ip}    (10.0.1.10 - t3.micro)
   Wazuh SIEM:   ${aws_eip.wazuh.public_ip}  (10.0.1.20 - m7i-flex.large 8GB)
-  VPN/IAM:      ${aws_eip.vpn.public_ip}    (10.0.1.30 - t3.small)
+  VPN/IAM:      ${aws_eip.vpn.public_ip}    (10.0.1.30 - c7i-flex.large 4GB)
   Hardening:    ${aws_eip.hardening.public_ip}    (10.0.1.40 - t3.micro)
 
   URLs:

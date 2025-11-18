@@ -205,6 +205,15 @@ resource "aws_security_group" "waf" {
     description = "Kong Admin API"
   }
 
+  # HTTP for WAF (Nginx with ModSecurity)
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTP for WAF testing"
+  }
+
   # Kong Proxy HTTP
   ingress {
     from_port   = 8000

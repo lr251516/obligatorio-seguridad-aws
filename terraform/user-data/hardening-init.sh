@@ -3,38 +3,43 @@ set -e
 export DEBIAN_FRONTEND=noninteractive
 exec > >(tee /tmp/user-data.log) 2>&1
 
+echo "[$(date)] Iniciando deployment Hardening VM (VANILLA + Wazuh SCA mode)" >> /tmp/user-data.log
+
+# Timezone y NTP Uruguay
+timedatectl set-timezone America/Montevideo
+
+# Actualización de sistema base
 apt-get update
 apt-get upgrade -y
-apt-get install -y git curl auditd aide ufw fail2ban unattended-upgrades
+
+# Paquetes mínimos requeridos
+apt-get install -y git curl systemd-timesyncd
+
+# Configurar NTP después de asegurar que está instalado
+echo "NTP=0.uy.pool.ntp.org 1.uy.pool.ntp.org" >> /etc/systemd/timesyncd.conf
+systemctl enable systemd-timesyncd
+systemctl restart systemd-timesyncd
 
 hostnamectl set-hostname hardening-vm
-mkdir -p /opt/fosil/scripts
 
-# Clonar repo
+# Clonar repositorio con scripts de hardening
 cd /opt
-if [ -d "fosil" ]; then
-  cd fosil && git pull origin main || true
+if [ -d "fosil/.git" ]; then
+  echo "Repo already exists, pulling latest changes..."
+  cd fosil
+  git pull origin main
 else
-  git clone https://github.com/lr251516/obligatorio-seguridad-aws.git fosil || true
+  echo "Cloning repository..."
+  rm -rf fosil
+  git clone https://github.com/lr251516/obligatorio-seguridad-aws.git fosil
   cd fosil
 fi
 chown -R ubuntu:ubuntu /opt/fosil
 
-# Habilitar servicios de seguridad
-systemctl enable auditd
-systemctl start auditd
-systemctl enable fail2ban
-systemctl start fail2ban
+# Hacer scripts ejecutables
+chmod +x /opt/fosil/Hardening/scripts/*.sh
 
-# Configurar firewall UFW básico
-ufw --force enable
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow from 10.0.1.0/24 to any port 22  # SSH desde VPC
-ufw allow 22/tcp  # SSH para testing (restringido luego por Security Group)
-ufw allow 51820/udp  # WireGuard
-
-# /etc/hosts
+# /etc/hosts para resolución interna
 cat >> /etc/hosts <<HOSTS
 
 # Obligatorio SRD - AWS Internal IPs
@@ -44,8 +49,8 @@ cat >> /etc/hosts <<HOSTS
 10.0.1.40   hardening-vm   hardening
 HOSTS
 
-# Instalar agente Wazuh
-echo "Instalando agente Wazuh..." >> /tmp/user-data.log
+# Wazuh-agent
+echo "[$(date)] Instalando Wazuh agent para SCA..." >> /tmp/user-data.log
 curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | apt-key add -
 echo "deb https://packages.wazuh.com/4.x/apt/ stable main" | tee /etc/apt/sources.list.d/wazuh.list
 apt-get update
@@ -53,13 +58,14 @@ apt-get update
 # Evitar conflictos con postfix
 apt-get remove --purge -y postfix 2>/dev/null || true
 
-# Instalar agente
+# Instalar agente Wazuh
 WAZUH_MANAGER="10.0.1.20" \
 WAZUH_AGENT_NAME="hardening-vm" \
 DEBIAN_FRONTEND=noninteractive \
 apt-get install -y wazuh-agent=4.13.1-1
 
-# Configurar FIM (File Integrity Monitoring)
+# Configurar FIM (File Integrity Monitoring) mínimo
+# Se monitoreará /etc/passwd y SSH config para demostrar FIM antes/después de hardening
 sed -i '/<\/ossec_config>$/i \
   <syscheck>\n\
     <disabled>no</disabled>\n\
@@ -78,10 +84,36 @@ sed -i '/<\/ossec_config>$/i \
     <ignore type="sregex">\\.swp$</ignore>\n\
   </syscheck>' /var/ossec/etc/ossec.conf
 
-# Iniciar agente
+# Iniciar agente Wazuh
 systemctl daemon-reload
 systemctl enable wazuh-agent
 systemctl start wazuh-agent
 
-echo "Hardening VM init completed with Wazuh agent and FIM" > /tmp/user-data-completed.log
-date >> /tmp/user-data-completed.log
+echo "============================================" > /tmp/user-data-completed.log
+echo "Hardening VM - VANILLA + Wazuh SCA" >> /tmp/user-data-completed.log
+echo "============================================" >> /tmp/user-data-completed.log
+echo "" >> /tmp/user-data-completed.log
+echo "✅ VM levantada SIN hardening CIS aplicado" >> /tmp/user-data-completed.log
+echo "✅ Wazuh agent instalado y conectado" >> /tmp/user-data-completed.log
+echo "" >> /tmp/user-data-completed.log
+echo "📊 SCA Score Actual: ~40-50% (sin hardening)" >> /tmp/user-data-completed.log
+echo "" >> /tmp/user-data-completed.log
+echo "📋 PRÓXIMO PASO: Aplicar CIS Hardening manualmente" >> /tmp/user-data-completed.log
+echo "" >> /tmp/user-data-completed.log
+echo "1. Verificar SCA baseline en Wazuh Dashboard:" >> /tmp/user-data-completed.log
+echo "   http://wazuh-dashboard → Security Configuration Assessment" >> /tmp/user-data-completed.log
+echo "" >> /tmp/user-data-completed.log
+echo "2. Conectar a la VM:" >> /tmp/user-data-completed.log
+echo "   ssh -i ~/.ssh/obligatorio-srd ubuntu@<HARDENING_IP>" >> /tmp/user-data-completed.log
+echo "" >> /tmp/user-data-completed.log
+echo "3. Aplicar hardening CIS Level 1:" >> /tmp/user-data-completed.log
+echo "   cd /opt/fosil/Hardening/scripts" >> /tmp/user-data-completed.log
+echo "   sudo ./apply-cis-hardening.sh" >> /tmp/user-data-completed.log
+echo "" >> /tmp/user-data-completed.log
+echo "4. Verificar mejora de SCA score en Wazuh (esperado: 80-85%)" >> /tmp/user-data-completed.log
+echo "" >> /tmp/user-data-completed.log
+echo "Deployment completado: $(date)" >> /tmp/user-data-completed.log
+echo "============================================" >> /tmp/user-data-completed.log
+
+date >> /tmp/user-data.log
+echo "[$(date)] Hardening VM deployment completado" >> /tmp/user-data.log

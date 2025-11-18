@@ -1,11 +1,11 @@
 variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-2"
 }
 
 variable "availability_zone" {
-  description = "Specific AZ (try us-east-1b or us-east-1c if fails)"
+  description = "Specific AZ"
   type        = string
   default     = ""
 }

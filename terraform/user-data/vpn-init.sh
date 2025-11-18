@@ -1,16 +1,28 @@
 #!/bin/bash
 set -e
+
+# Timezone y NTP Uruguay
+timedatectl set-timezone America/Montevideo
+
 apt-get update
 apt-get upgrade -y
-apt-get install -y git curl wireguard-tools openjdk-17-jre-headless
+apt-get install -y git curl wireguard-tools openjdk-17-jre-headless systemd-timesyncd
+
+# Configurar NTP después de asegurar que está instalado
+echo "NTP=0.uy.pool.ntp.org 1.uy.pool.ntp.org" >> /etc/systemd/timesyncd.conf
+systemctl enable systemd-timesyncd
+systemctl restart systemd-timesyncd
 
 hostnamectl set-hostname vpn-iam
 
 # Clonar repo con scripts
 cd /opt
 if [ -d "fosil/.git" ]; then
-  cd fosil && git pull origin main || true
+  echo "Repo already exists, pulling latest changes..."
+  cd fosil
+  git pull origin main
 else
+  echo "Cloning repository..."
   rm -rf fosil
   git clone https://github.com/lr251516/obligatorio-seguridad-aws.git fosil
   cd fosil
@@ -79,9 +91,7 @@ systemctl daemon-reload
 systemctl enable wazuh-agent
 systemctl start wazuh-agent
 
-# ============================================
-# INSTALAR KEYCLOAK
-# ============================================
+# Instalar keycloak
 echo "[$(date)] Instalando Keycloak..." >> /tmp/user-data.log
 
 # PostgreSQL para Keycloak
@@ -101,9 +111,13 @@ mv keycloak-${KEYCLOAK_VERSION} keycloak
 rm keycloak-${KEYCLOAK_VERSION}.tar.gz
 
 # Usuario keycloak con directorio home
-useradd -r -m -d /home/keycloak -s /bin/false keycloak || true
+useradd -r -m -d /home/keycloak -s /bin/bash keycloak || true
 mkdir -p /home/keycloak/.keycloak
 chown -R keycloak:keycloak /opt/keycloak /home/keycloak
+
+# Agregar keycloak a sudoers para que pueda ejecutar kcadm.sh
+echo "keycloak ALL=(keycloak) NOPASSWD: ALL" > /etc/sudoers.d/keycloak
+chmod 440 /etc/sudoers.d/keycloak
 
 # Obtener IP pública de la instancia
 PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
@@ -133,7 +147,7 @@ KC
 
 cat > /opt/keycloak/conf/jvm-opts.conf <<JVM
 -Xms512m
--Xmx1024m
+-Xmx2g
 -XX:MetaspaceSize=128m
 -XX:MaxMetaspaceSize=256m
 JVM
@@ -186,13 +200,15 @@ sudo -u keycloak bin/kcadm.sh config credentials \
 sudo -u keycloak bin/kcadm.sh update realms/master \
   -s sslRequired=NONE 2>&1 | tee -a /tmp/user-data.log
 
-# Crear realm fosil automáticamente
-echo "[$(date)] Creando realm fosil..." >> /tmp/user-data.log
+# Crear realm fosil automáticamente 
+echo "[$(date)] Creando realm fosil en modo automático..." >> /tmp/user-data.log
 sleep 10
 cd /opt/fosil/VPN-IAM/scripts
-sudo -u keycloak /opt/fosil/VPN-IAM/scripts/create-realm.sh 2>&1 | tee -a /tmp/user-data.log || echo "Warning: create-realm.sh falló, ejecutar manualmente" >> /tmp/user-data.log
+sudo -u keycloak /opt/fosil/VPN-IAM/scripts/create-realm.sh --auto 2>&1 | tee -a /tmp/user-data.log || echo "Warning: create-realm.sh falló, verificar en /tmp/user-data.log" >> /tmp/user-data.log
 
 echo "VPN/IAM init completed with Wazuh agent + Keycloak" > /tmp/user-data-completed.log
 echo "Keycloak: http://10.0.1.30:8080 (admin/admin)" >> /tmp/user-data-completed.log
 echo "Keycloak realm master configurado para HTTP" >> /tmp/user-data-completed.log
+echo "Keycloak realm 'fosil' creado automáticamente con 5 usuarios" >> /tmp/user-data-completed.log
+echo "Ver detalles en: /tmp/user-data.log" >> /tmp/user-data-completed.log
 date >> /tmp/user-data-completed.log

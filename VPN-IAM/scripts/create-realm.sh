@@ -9,6 +9,12 @@ KC_CLI="/opt/keycloak/bin/kcadm.sh"
 SERVER="http://localhost:8080"
 REALM="fosil"
 
+# Modo automático (no interactivo) para user-data scripts
+AUTO_MODE=false
+if [ "$1" = "--auto" ]; then
+    AUTO_MODE=true
+fi
+
 echo ""
 echo "  Keycloak Realm Setup - Fósil Energías Renovables        "
 echo ""
@@ -38,14 +44,23 @@ echo ""
 # Verificar si el realm ya existe
 if sudo -u keycloak $KC_CLI get realms/$REALM &> /dev/null; then
     echo "[WARN]  El realm '$REALM' ya existe"
-    read -p "¿Deseas eliminarlo y recrearlo? (s/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Ss]$ ]]; then
-        echo "[+] Eliminando realm existente..."
-        sudo -u keycloak $KC_CLI delete realms/$REALM
-        echo "[OK] Realm eliminado"
+
+    if [ "$AUTO_MODE" = true ]; then
+        # Modo automático: eliminar y recrear sin preguntar
+        echo "[AUTO] Modo automático: eliminando y recreando realm..."
+        sudo -u keycloak $KC_CLI delete realms/$REALM 2>/dev/null || true
+        echo "[OK] Realm eliminado automáticamente"
     else
-        echo "ℹ️  Manteniendo realm existente. Solo se crearán roles y usuarios faltantes."
+        # Modo interactivo: preguntar al usuario
+        read -p "¿Deseas eliminarlo y recrearlo? (s/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Ss]$ ]]; then
+            echo "[+] Eliminando realm existente..."
+            sudo -u keycloak $KC_CLI delete realms/$REALM
+            echo "[OK] Realm eliminado"
+        else
+            echo "ℹ️  Manteniendo realm existente. Solo se crearán roles y usuarios faltantes."
+        fi
     fi
 fi
 
