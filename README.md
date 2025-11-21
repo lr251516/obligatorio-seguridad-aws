@@ -19,25 +19,25 @@ Infraestructura de seguridad para Fósil Energías Renovables S.A. desplegada en
 │                  AWS VPC (10.0.1.0/24)                       │
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
-│  ┌─────────────────┐         ┌─────────────────┐            │
-│  │  Wazuh SIEM     │◀────────│  WAF/Kong       │            │
-│  │  10.0.1.20      │  logs   │  10.0.1.10      │            │
-│  │  m7i-flex.large │         │  ModSecurity    │            │
-│  │  (8GB RAM)      │         │  t3.micro       │            │
-│  └────────┬────────┘         └─────────────────┘            │
+│  ┌─────────────────┐         ┌─────────────────┐             │
+│  │  Wazuh SIEM     │◀────────│  WAF/Kong       │             │
+│  │  10.0.1.20      │  logs   │  10.0.1.10      │             │
+│  │  m7i-flex.large │         │  ModSecurity    │             │
+│  │  (8GB RAM)      │         │  t3.micro       │             │
+│  └────────┬────────┘         └─────────────────┘             │
 │           │                                                  │
 │           │ agents                                           │
 │           ▼                                                  │
-│  ┌─────────────────┐         ┌─────────────────┐            │
-│  │  VPN/IAM        │◀───VPN──│  Hardening VM   │            │
-│  │  10.0.1.30      │         │  10.0.1.40      │            │
-│  │  Keycloak       │         │  CIS L1 + FIM   │            │
-│  │  WireGuard      │         │  t3.micro       │            │
-│  │  c7i-flex.large │         └─────────────────┘            │
-│  │  (4GB RAM)      │                                        │
-│  └─────────────────┘                                        │
+│  ┌─────────────────┐         ┌─────────────────┐             │
+│  │  VPN/IAM        │◀───VPN──│  Hardening VM   │             │
+│  │  10.0.1.30      │         │  10.0.1.40      │             │
+│  │  Keycloak       │         │  CIS L1 + FIM   │             │
+│  │  WireGuard      │         │  t3.micro       │             │
+│  │  c7i-flex.large │         └─────────────────┘             │
+│  │  (4GB RAM)      │                                         │
+│  └─────────────────┘                                         │
 │                                                              │
-│  VPN Tunnel: 10.0.0.0/24 (WireGuard overlay network)        │
+│  VPN Tunnel: 10.0.0.0/24 (WireGuard overlay network)         │
 └──────────────────────────────────────────────────────────────┘
 ```
 

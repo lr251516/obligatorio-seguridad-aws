@@ -107,6 +107,15 @@ resource "aws_security_group" "wazuh" {
     description = "Wazuh agents"
   }
 
+  # ICMP from datacenter (via IPSec tunnel)
+  ingress {
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
+    cidr_blocks = ["10.100.0.0/24"]
+    description = "ICMP from datacenter"
+  }
+
   # Permitir tráfico interno VPC
   ingress {
     from_port   = 0
@@ -159,6 +168,42 @@ resource "aws_security_group" "vpn" {
     protocol    = "udp"
     cidr_blocks = ["0.0.0.0/0"]
     description = "WireGuard VPN"
+  }
+
+  # IPSec - IKE (phase 1)
+  ingress {
+    from_port   = 500
+    to_port     = 500
+    protocol    = "udp"
+    cidr_blocks = ["104.30.133.214/32"]
+    description = "IPSec IKE from datacenter"
+  }
+
+  # IPSec - NAT Traversal (phase 2)
+  ingress {
+    from_port   = 4500
+    to_port     = 4500
+    protocol    = "udp"
+    cidr_blocks = ["104.30.133.214/32"]
+    description = "IPSec NAT-T from datacenter"
+  }
+
+  # IPSec - ESP protocol
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "50"
+    cidr_blocks = ["104.30.133.214/32"]
+    description = "IPSec ESP from datacenter"
+  }
+
+  # ICMP for testing (ping from datacenter)
+  ingress {
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
+    cidr_blocks = ["104.30.133.214/32"]
+    description = "ICMP from datacenter"
   }
 
   # Tráfico interno
@@ -232,6 +277,15 @@ resource "aws_security_group" "waf" {
     description = "Kong Proxy HTTPS"
   }
 
+  # ICMP from datacenter (via IPSec tunnel)
+  ingress {
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
+    cidr_blocks = ["10.100.0.0/24"]
+    description = "ICMP from datacenter"
+  }
+
   # Tráfico interno
   ingress {
     from_port   = 0
@@ -283,6 +337,15 @@ resource "aws_security_group" "hardening" {
     protocol    = "udp"
     cidr_blocks = ["0.0.0.0/0"]
     description = "WireGuard VPN"
+  }
+
+  # ICMP from datacenter (via IPSec tunnel)
+  ingress {
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
+    cidr_blocks = ["10.100.0.0/24"]
+    description = "ICMP from datacenter"
   }
 
   # Tráfico interno

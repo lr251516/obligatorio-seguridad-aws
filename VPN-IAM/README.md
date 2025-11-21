@@ -82,11 +82,101 @@ sudo wg-quick down ~/jperez-infraestructura-admin.conf
 | `devops` | Solo SIEM + WAF |
 | `viewer` | Solo SIEM |
 
-## VPN Site-to-Site
+## VPN Site-to-Site (IPSec)
 
-Conecta VM VPN (10.0.1.30) ↔ VM Hardening (10.0.1.40) mediante túnel WireGuard.
+Conecta datacenter local (Multipass VM) ↔ AWS VPC mediante túnel IPSec con strongSwan.
 
-**Limitación:** AWS bloquea IPs virtuales (10.0.0.x) a nivel hypervisor. El túnel funciona pero el routing entre VMs está limitado.
+### Topología
+
+```
+Datacenter Local (Multipass)    Internet    AWS VPN VM (10.0.1.30)
+10.100.0.0/24              <--IPSec Túnel-->    10.0.0.0/16
+                                                      |
+                                           Acceso a todas las VMs
+```
+
+### Setup en Multipass (Datacenter)
+
+```bash
+# 1. Instalar Multipass
+brew install multipass
+
+# 2. Crear VM datacenter
+multipass launch --name datacenter --cpus 1 --memory 1G --disk 5G
+
+# 3. SSH a la VM
+multipass shell datacenter
+
+# 4. Instalar git y clonar scripts
+sudo apt update && sudo apt install -y git
+git clone https://github.com/lr251516/obligatorio-seguridad-aws.git
+cd obligatorio-seguridad-aws/VPN-IAM/scripts
+
+# 5. Configurar IPSec
+chmod +x setup-ipsec-datacenter.sh
+sudo ./setup-ipsec-datacenter.sh
+# Te pedirá: IP pública AWS VPN + PSK (ej: "FosilSecureKey2024!")
+```
+
+### Setup en AWS VPN VM
+
+```bash
+# 1. SSH a AWS VPN VM
+ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw vpn_public_ip)
+
+# 2. Ejecutar script IPSec
+cd /opt/fosil/VPN-IAM/scripts
+chmod +x setup-ipsec-aws.sh
+sudo ./setup-ipsec-aws.sh
+# Te pedirá: IP pública de tu Mac + mismo PSK que usaste arriba
+```
+
+**IMPORTANTE:** Para obtener tu IP pública en Mac: `curl https://api.ipify.org`
+
+### Testing de Conectividad
+
+Desde Multipass VM:
+
+```bash
+# Verificar estado del túnel
+sudo ipsec status
+# Debe mostrar: ESTABLISHED
+
+# Ping a VMs en AWS
+ping 10.0.1.20  # Wazuh SIEM
+ping 10.0.1.10  # WAF Kong
+ping 10.0.1.30  # VPN/IAM
+ping 10.0.1.40  # Hardening
+
+# Script de testing completo
+cd obligatorio-seguridad-aws/VPN-IAM/scripts
+chmod +x test-ipsec-connectivity.sh
+./test-ipsec-connectivity.sh
+```
+
+### Troubleshooting
+
+Si el túnel no se establece:
+
+```bash
+# Ver logs en tiempo real
+sudo journalctl -u strongswan-starter -f
+
+# Reiniciar túnel
+sudo ipsec restart
+
+# Verificar configuración
+sudo ipsec statusall
+
+# Verificar IPs
+ip addr show  # Debe tener 10.100.0.1 en datacenter
+```
+
+Si el ping falla pero túnel está ESTABLISHED:
+
+1. **Security Group AWS:** Agregar regla ICMP desde tu IP pública
+2. **Firewall Mac:** `sudo pfctl -d` (deshabilitar temporalmente)
+3. **IP forwarding:** `sysctl net.ipv4.ip_forward` debe ser `1`
 
 ## IAM Behavioral Analytics
 
