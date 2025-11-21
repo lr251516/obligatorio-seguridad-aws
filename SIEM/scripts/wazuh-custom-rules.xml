@@ -5,8 +5,8 @@
 <group name="local,authentication,">
 
   <!-- CASO 1: Múltiples intentos de autenticación fallidos (SSH) -->
-  <rule id="100001" level="10" frequency="5" timeframe="300">
-    <if_matched_sid>5503</if_matched_sid>
+  <rule id="100001" level="10" frequency="3" timeframe="120">
+    <if_matched_sid>5503,5710</if_matched_sid>
     <description>Wazuh: Múltiples intentos de autenticación SSH fallidos</description>
     <mitre>
       <id>T1110</id>
@@ -44,7 +44,7 @@
 
   <!-- SQL Injection detectado por ModSecurity -->
   <rule id="100010" level="10">
-    <if_sid>31100</if_sid>
+    <if_sid>31333</if_sid>
     <match>sql|union|select|insert|drop|delete|update</match>
     <description>Kong: Intento de SQL Injection detectado</description>
     <mitre>
@@ -55,7 +55,7 @@
 
   <!-- XSS detectado -->
   <rule id="100011" level="10">
-    <if_sid>31100</if_sid>
+    <if_sid>31333</if_sid>
     <match>script|onerror|onload|alert\(|eval\(|javascript:</match>
     <description>Kong: Intento de XSS (Cross-Site Scripting) detectado</description>
     <mitre>
@@ -66,7 +66,7 @@
 
   <!-- RCE (Remote Code Execution) -->
   <rule id="100012" level="12">
-    <if_sid>31100</if_sid>
+    <if_sid>31333</if_sid>
     <match>exec|system|passthru|shell_exec|/bin/bash|/bin/sh</match>
     <description>Kong: Intento CRÍTICO de RCE (Remote Code Execution)</description>
     <mitre>
@@ -77,7 +77,7 @@
 
   <!-- Path Traversal / LFI -->
   <rule id="100013" level="10">
-    <if_sid>31100</if_sid>
+    <if_sid>31333</if_sid>
     <match>\.\.\/|\.\.\\|etc/passwd|boot\.ini</match>
     <description>Kong: Intento de Path Traversal detectado</description>
     <mitre>
