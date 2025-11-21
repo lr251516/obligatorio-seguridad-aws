@@ -74,7 +74,8 @@ nginx_worker_processes=auto
 K
 mkdir -p /var/log/kong && chown kong:kong /var/log/kong
 kong migrations bootstrap -c /etc/kong/kong.conf
-kong start -c /etc/kong/kong.conf
+systemctl enable kong
+systemctl start kong
 
 # Nginx + ModSecurity
 cd /opt
