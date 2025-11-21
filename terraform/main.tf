@@ -64,6 +64,12 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.main.id
   }
 
+  # Ruta para datacenter via IPSec tunnel (VPN VM)
+  route {
+    cidr_block           = "10.100.0.0/24"
+    network_interface_id = aws_instance.vpn.primary_network_interface_id
+  }
+
   tags = {
     Name = "fosil-public-rt"
   }
