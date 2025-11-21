@@ -62,11 +62,33 @@ echo "$PASSWORD" > /root/wazuh-password.txt
 chmod 600 /root/wazuh-password.txt
 
 # ============================================
-# APLICAR REGLAS CUSTOM DE WAZUH
+# CLONAR REPOSITORIO PRIMERO (necesario para custom rules)
 # ============================================
-echo "[$(date)] Aplicando reglas personalizadas de Wazuh..." >> /tmp/user-data.log
+echo "[$(date)] Clonando repositorio..." >> /tmp/user-data.log
 
-cat > /var/ossec/etc/rules/local_rules.xml <<'RULES'
+cd /opt
+if [ -d "fosil/.git" ]; then
+  echo "Repo already exists, pulling latest changes..."
+  cd fosil
+  git pull origin main
+else
+  echo "Cloning repository..."
+  rm -rf fosil
+  git clone https://github.com/lr251516/obligatorio-seguridad-aws.git fosil
+  cd fosil
+fi
+
+# ============================================
+# APLICAR REGLAS CUSTOM DE WAZUH DESDE REPO
+# ============================================
+echo "[$(date)] Aplicando reglas personalizadas de Wazuh desde repo..." >> /tmp/user-data.log
+
+cp /opt/fosil/SIEM/scripts/wazuh-custom-rules.xml /var/ossec/etc/rules/local_rules.xml
+chown root:ossec /var/ossec/etc/rules/local_rules.xml
+chmod 640 /var/ossec/etc/rules/local_rules.xml
+
+# Backup del HEREDOC viejo (por si acaso) - INICIO
+cat > /var/ossec/etc/rules/local_rules.xml.backup-heredoc <<'RULES'
 <!-- /var/ossec/etc/rules/local_rules.xml -->
 <!-- Reglas personalizadas - Fósil Energías Renovables -->
 <!-- Estas reglas funcionan con Wazuh 4.13.1 -->
@@ -219,24 +241,13 @@ cat > /var/ossec/etc/rules/local_rules.xml <<'RULES'
 
 </group>
 RULES
+# FIN backup HEREDOC viejo (no se usa, solo referencia)
 
-# Reiniciar Wazuh Manager para aplicar reglas
-echo "[$(date)] Reiniciando Wazuh Manager para aplicar reglas..." >> /tmp/user-data.log
+# Reiniciar Wazuh Manager para aplicar reglas desde repo
+echo "[$(date)] Reiniciando Wazuh Manager para aplicar reglas desde repo..." >> /tmp/user-data.log
 systemctl restart wazuh-manager
 
-# Clonar repositorio
-echo "[$(date)] Clonando repositorio..." >> /tmp/user-data.log
-cd /opt
-if [ -d "fosil/.git" ]; then
-  echo "Repo already exists, pulling latest changes..."
-  cd fosil
-  git pull origin main
-else
-  echo "Cloning repository..."
-  rm -rf fosil
-  git clone https://github.com/lr251516/obligatorio-seguridad-aws.git fosil
-  cd fosil
-fi
+# Permisos del repositorio (ya clonado arriba)
 chown -R ubuntu:ubuntu /opt/fosil
 
 echo "Wazuh SIEM instalado - Password en /root/wazuh-password.txt" > /tmp/user-data-completed.log
