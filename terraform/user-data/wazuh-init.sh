@@ -61,6 +61,10 @@ PASSWORD=$(grep "Password:" /tmp/wazuh-installation.log | tail -1 | awk '{print 
 echo "$PASSWORD" > /root/wazuh-password.txt
 chmod 600 /root/wazuh-password.txt
 
+# Wait for Wazuh Manager to fully initialize (crear local_rules.xml default)
+echo "[$(date)] Esperando a que Wazuh Manager termine de inicializar..." >> /tmp/user-data.log
+sleep 10
+
 # ============================================
 # CLONAR REPOSITORIO PRIMERO (necesario para custom rules)
 # ============================================
@@ -83,9 +87,30 @@ fi
 # ============================================
 echo "[$(date)] Aplicando reglas personalizadas de Wazuh desde repo..." >> /tmp/user-data.log
 
+# Wait for local_rules.xml to exist (created by Wazuh post-install)
+RETRIES=0
+while [ ! -f /var/ossec/etc/rules/local_rules.xml ] && [ $RETRIES -lt 30 ]; do
+  echo "[$(date)] Esperando a que /var/ossec/etc/rules/local_rules.xml sea creado... (intento $((RETRIES+1))/30)" >> /tmp/user-data.log
+  sleep 2
+  RETRIES=$((RETRIES+1))
+done
+
+if [ ! -f /var/ossec/etc/rules/local_rules.xml ]; then
+  echo "[$(date)] ERROR: /var/ossec/etc/rules/local_rules.xml no fue creado después de 60 segundos" >> /tmp/user-data.log
+  exit 1
+fi
+
 cp /opt/fosil/SIEM/scripts/wazuh-custom-rules.xml /var/ossec/etc/rules/local_rules.xml
-chown root:ossec /var/ossec/etc/rules/local_rules.xml
-chmod 640 /var/ossec/etc/rules/local_rules.xml
+
+# Set proper ownership and permissions (ossec group should exist after Wazuh installation)
+if getent group ossec > /dev/null 2>&1; then
+  chown root:ossec /var/ossec/etc/rules/local_rules.xml
+  chmod 640 /var/ossec/etc/rules/local_rules.xml
+else
+  echo "WARNING: ossec group not found, using root:root ownership"
+  chown root:root /var/ossec/etc/rules/local_rules.xml
+  chmod 644 /var/ossec/etc/rules/local_rules.xml
+fi
 
 # Backup del HEREDOC viejo (por si acaso) - INICIO
 cat > /var/ossec/etc/rules/local_rules.xml.backup-heredoc <<'RULES'
