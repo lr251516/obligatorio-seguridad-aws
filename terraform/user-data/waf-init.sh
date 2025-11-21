@@ -5,7 +5,9 @@ exec > >(tee /tmp/user-data.log) 2>&1
 
 # Timezone y NTP Uruguay
 timedatectl set-timezone America/Montevideo
+apt-get install -y systemd-timesyncd
 echo "NTP=0.uy.pool.ntp.org 1.uy.pool.ntp.org" >> /etc/systemd/timesyncd.conf
+systemctl enable systemd-timesyncd
 systemctl restart systemd-timesyncd
 
 # System setup
