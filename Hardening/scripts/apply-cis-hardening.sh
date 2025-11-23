@@ -107,6 +107,17 @@ sysctl -p /etc/sysctl.d/99-cis-hardening.conf
 
 # 4. AUDITING
 echo "[4/8] Auditd..."
+
+# Instalar auditd si no está instalado
+if ! command -v auditctl &> /dev/null; then
+    echo "  → Instalando auditd..."
+    apt-get update -qq
+    apt-get install -y -qq auditd audispd-plugins
+fi
+
+# Crear directorio de reglas si no existe
+mkdir -p /etc/audit/rules.d
+
 cat > /etc/audit/rules.d/cis-hardening.rules <<'EOF'
 # Borrar reglas existentes
 -D
