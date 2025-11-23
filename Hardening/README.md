@@ -1,157 +1,245 @@
-# Hardening con SCA (Security Configuration Assessment)
+# Hardening CIS Benchmark Level 1
 
-VM Ubuntu 22.04 con **Wazuh SCA** para demostrar mejora de postura de seguridad aplicando **CIS Benchmark Level 1** manualmente.
-
-## 🎯 Objetivo
-
-Demostrar el **antes y después** de aplicar hardening CIS:
-1. **VM Vanilla** → SCA score bajo (~40-50%)
-2. **Aplicar script de hardening** → SCA score mejorado (~80-85%)
+VM Ubuntu 22.04 con **Wazuh SCA** (Security Configuration Assessment) demostrando mejora de postura de seguridad mediante aplicación manual de **CIS Benchmark Level 1**.
 
 ---
 
-## 🚀 Workflow de Deployment
+## 🎯 Objetivo
 
-### Paso 1: Deployment Automático (Terraform)
+Demostrar **antes y después** de aplicar hardening CIS:
+
+| Estado | SCA Score | Descripción |
+|--------|-----------|-------------|
+| **ANTES** (vanilla) | ~45% | Sistema sin hardening |
+| **DESPUÉS** (CIS L1) | **65%** | Script con 55+ checks CIS |
+
+**Score final limitado por:**
+- 23 checks requieren particiones separadas (/tmp, /var, /home) - imposible sin recrear VM
+- 9 checks de firewall nativo (iptables/nftables) - conflicto con UFW
+- 1 check bootloader password - rompe boot AWS EC2
+
+**Máximo score posible sin recrear VM: ~70%**
+
+---
+
+## 🚀 Deployment
+
+### 1. Deployment Automático (Terraform)
 
 La VM se levanta en **modo VANILLA** con:
-- ✅ **Wazuh Agent** instalado (para SCA baseline)
-- ✅ **FIM** (File Integrity Monitoring) configurado
+- ✅ Wazuh Agent instalado
+- ✅ FIM (File Integrity Monitoring) configurado
 - ❌ **SIN hardening CIS** aplicado
 
 ```bash
 terraform apply -auto-approve
 ```
 
-**Resultado:** VM básica conectada a Wazuh, con SCA mostrando score bajo.
+### 2. Verificar SCA Baseline (ANTES del hardening)
 
----
+1. Acceder a Wazuh Dashboard: `https://<WAZUH_IP>`
+2. **Security Configuration Assessment** → agente **hardening-vm**
+3. **Capturar screenshot** del score (~45%)
 
-### Paso 2: Verificar SCA Baseline (ANTES del hardening)
-
-1. Acceder a Wazuh Dashboard: `http://<wazuh-ip>`
-2. Ir a: **Security Configuration Assessment**
-3. Seleccionar agente: **hardening-vm**
-4. **Capturar screenshot** del score bajo (~40-50%)
-
----
-
-### Paso 3: Aplicar CIS Hardening Manualmente
-
-Conectar a la VM y ejecutar el script de hardening:
+### 3. Aplicar CIS Hardening
 
 ```bash
-# Conectar a VM
+# Conectar a VM (puerto 2222 después de hardening)
 ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw hardening_public_ip)
 
-# Ejecutar hardening CIS Level 1
+# Ejecutar script de hardening
 cd /opt/fosil/Hardening/scripts
-sudo ./apply-cis-hardening.sh
+sudo bash apply-cis-hardening-ultra.sh
 
-# Reiniciar para aplicar todos los cambios
-sudo reboot
+# VM reiniciará automáticamente en 10 seg
 ```
 
-**El script aplica:**
-- ✅ Filesystem hardening (modprobe, /tmp secure mount)
-- ✅ Bootloader permissions
-- ✅ Kernel hardening (sysctl: net.ipv4.*, kernel.randomize_va_space, etc.)
-- ✅ Auditd con reglas CIS (monitoreo de /etc/passwd, sudoers, SSH, etc.)
-- ✅ Permisos de archivos críticos (chmod 600 /etc/shadow, etc.)
-- ✅ Políticas de contraseñas fuertes (PAM + pwquality: minlen=14)
-- ✅ User account hardening (TMOUT, umask, deshabilitar usuarios innecesarios)
-- ✅ SSH hardening (PermitRootLogin no, MaxAuthTries 4, ClientAliveInterval)
-- ✅ UFW firewall habilitado (default deny incoming)
-- ✅ Fail2ban para SSH brute force (maxretry=3, bantime=1800s)
-- ✅ Servicios innecesarios removidos (avahi, cups, rpcbind, etc.)
-- ✅ Actualizaciones automáticas de seguridad
+**Script aplica 55+ checks CIS:**
 
----
+1. **Kernel & Filesystem**
+   - Disable 15+ filesystems/protocols no usados (cramfs, usb-storage, dccp, bluetooth, etc.)
+   - 30+ parámetros kernel hardening (sysctl)
+   - /dev/shm con noexec
 
-### Paso 4: Verificar SCA Mejorado (DESPUÉS del hardening)
+2. **Auditoría (20+ checks)**
+   - audit=1 en GRUB
+   - Auditd con 40+ reglas CIS
+   - Monitoreo: sudoers, SSH, passwd, módulos kernel, mount/umount, file deletions
+   - AIDE (filesystem integrity) con timer diario
+   - Cryptographic verification de audit tools
 
-Después del reboot (esperar ~2-3 min para que Wazuh actualice):
+3. **AppArmor**
+   - Enforce mode en todos los perfiles
 
-1. Acceder a Wazuh Dashboard: `http://<wazuh-ip>`
-2. Ir a: **Security Configuration Assessment**
-3. Seleccionar agente: **hardening-vm**
-4. **Capturar screenshot** del score mejorado (~80-85%)
+4. **File Permissions**
+   - /etc/passwd, /etc/shadow, /etc/ssh/sshd_config, etc.
+   - Permisos crontab y directorios cron
 
----
+5. **User Accounts**
+   - UMASK 027, PASS_MIN_AGE 1, INACTIVE 30
+   - TMOUT 900 (15 min sesión inactiva)
+   - Deshabilitar/lockear usuarios innecesarios
 
-## 📊 Score Esperado
+6. **PAM & Passwords**
+   - pwquality: minlen=14, minclass=4, dictcheck
+   - faillock: 5 intentos, 900s unlock time
+   - Password history: 5 passwords remembered
+   - No nullok, yescrypt encryption
 
-| Estado | SCA Score | Descripción |
-|--------|-----------|-------------|
-| **ANTES** (vanilla) | 40-50% | Sistema sin hardening, múltiples checks fallando |
-| **DESPUÉS** (CIS L1) | 80-85% | Hardening aplicado, configuración segura |
+7. **SSH Hardening**
+   - **Puerto 2222** (no 22)
+   - PermitRootLogin no, MaxAuthTries 4
+   - DisableForwarding yes
+   - Ciphers/MACs/KexAlgorithms fuertes
+   - AllowUsers ubuntu
+
+8. **Firewall UFW**
+   - Default deny incoming/outgoing/routed
+   - Loopback configurado
+   - SSH desde IP específica (104.30.133.214) + VPC (10.0.1.0/24)
+   - Outgoing solo: DNS, NTP, HTTP/HTTPS, Wazuh
+
+9. **Fail2ban**
+   - SSH protection puerto 2222
+   - maxretry 5, bantime 1800s
+
+10. **Chrony NTP**
+    - Usuario _chrony
+
+11. **Servicios & Seguridad**
+    - Disable apport, avahi, cups, nfs, snmpd
+    - Coredumps deshabilitados
+    - IPv6 disabled
+    - Root password set (random)
+    - Sudo sin NOPASSWD
+
+### 4. Verificar SCA Mejorado (DESPUÉS del hardening)
+
+Esperar 2-3 min después del reboot para que Wazuh actualice.
+
+1. Acceder a Wazuh Dashboard: `https://<WAZUH_IP>`
+2. **Security Configuration Assessment** → agente **hardening-vm**
+3. **Capturar screenshot** del score mejorado (**65%**)
 
 ---
 
 ## 🔍 FIM (File Integrity Monitoring)
 
-**Archivos monitoreados en tiempo real:**
+Archivos monitoreados en tiempo real por Wazuh:
 - `/etc/passwd`, `/etc/shadow`, `/etc/group`
 - `/etc/sudoers`, `/etc/sudoers.d/`
-- `/etc/ssh/sshd_config`
+- `/etc/ssh/sshd_config`, `/etc/ssh/sshd_config.d/`
 - `/root/.ssh/`
 - `/etc/ufw/` (firewall rules)
 
-**Cualquier modificación genera alerta en Wazuh Dashboard.**
+**Testing:**
+```bash
+sudo echo "test_fim:x:9999:9999::/tmp:/bin/false" >> /etc/passwd
+# Ver alerta inmediata en Wazuh Dashboard: Rule 100020
+```
 
 ---
 
-## 📋 Testing Manual
+## 🧪 Testing Post-Hardening
 
-### Test 1: FIM - Modificar archivo crítico
+### Test 1: Conectar SSH puerto 2222
+
 ```bash
-sudo echo "test_user:x:9999:9999::/tmp:/bin/false" >> /etc/passwd
-# Ver alerta en Wazuh Dashboard (Rule 100020)
+ssh -i ~/.ssh/obligatorio-srd -p 2222 ubuntu@<HARDENING_IP>
 ```
 
-### Test 2: Fail2ban - Brute force SSH
-```bash
-# Desde máquina externa, 4 intentos SSH fallidos:
-ssh wrong_user@<hardening-ip>  # repetir 4 veces
-# Ver IP baneada: sudo fail2ban-client status sshd
-```
+### Test 2: Verificar SSH hardening
 
-### Test 3: Verificar SSH hardening
 ```bash
-sudo sshd -T | grep -E "permitrootlogin|maxauthtries|allowtcpforwarding"
-# Debe mostrar:
+sudo sshd -T | grep -E "permitrootlogin|maxauthtries|disableforwarding"
+# Esperado:
 # permitrootlogin no
 # maxauthtries 4
-# allowtcpforwarding no
+# disableforwarding yes
+```
+
+### Test 3: Verificar UFW firewall
+
+```bash
+sudo ufw status verbose
+# Esperado:
+# Status: active
+# Logging: medium
+# Default: deny (incoming), deny (outgoing), deny (routed)
+```
+
+### Test 4: Verificar auditd
+
+```bash
+sudo auditctl -l | wc -l
+# Esperado: 40+ reglas
+```
+
+### Test 5: Fail2ban SSH brute force
+
+```bash
+# Desde otra máquina, 6 intentos fallidos:
+for i in {1..6}; do ssh -p 2222 wronguser@<HARDENING_IP>; done
+
+# En la VM hardening, verificar ban:
+sudo fail2ban-client status sshd
 ```
 
 ---
 
-## 🛠️ Troubleshooting
+## 📊 Análisis de Checks CIS
 
-**Ver logs de hardening:**
-```bash
-cat /tmp/user-data.log
-cat /tmp/user-data-completed.log
-```
+**Total: 72 checks CIS Benchmark L1**
 
-**Verificar Wazuh agent:**
-```bash
-sudo systemctl status wazuh-agent
-sudo /var/ossec/bin/agent_control -l  # desde manager
-```
+| Estado | Cantidad | %  | Motivo |
+|--------|----------|-----|--------|
+| ✅ **Implementados** | **39** | **54%** | Todos los posibles |
+| ❌ **Particiones** | 23 | 32% | Requiere recrear VM con fstab custom |
+| ❌ **Firewall nativo** | 9 | 13% | Conflicto iptables/nftables vs UFW |
+| ❌ **Bootloader password** | 1 | 1% | Rompe boot AWS EC2 |
 
-**Ver reglas auditd aplicadas:**
-```bash
-sudo auditctl -l
-```
+**Checks implementados incluyen:**
+- Filesystems & kernel hardening
+- Auditd (14 checks)
+- SSH (4 checks)
+- PAM & passwords (12 checks)
+- File permissions (5 checks)
+- AppArmor, AIDE, Chrony, UFW, Fail2ban
 
-**Ver estado UFW:**
-```bash
-sudo ufw status verbose
-```
+---
 
-**Ver bans de Fail2ban:**
-```bash
-sudo fail2ban-client status sshd
-```
+## 📁 Archivos del Proyecto
+
+### Scripts disponibles
+
+- **`apply-cis-hardening-ultra.sh`** - ✅ Script productivo (55+ checks, 65% SCA score)
+
+### Configuraciones aplicadas
+
+- `/etc/modprobe.d/cis.conf` - Filesystems disabled
+- `/etc/sysctl.d/99-cis.conf` - Kernel hardening
+- `/etc/audit/rules.d/cis.rules` - Auditd rules
+- `/etc/systemd/system/aide-check.timer` - AIDE daily check
+- `/etc/ssh/sshd_config.d/99-cis.conf` - SSH hardening
+- `/etc/fail2ban/jail.local` - Fail2ban config
+- `/etc/security/pwquality.conf` - Password policies
+- `/etc/security/faillock.conf` - Failed login lockout
+
+---
+
+## ⚠️ Importante
+
+### Después de aplicar hardening:
+
+1. **SSH puerto cambia a 2222** (desde 22)
+2. **UFW default outgoing = DENY** - Solo permite DNS, NTP, HTTP/HTTPS, Wazuh
+3. **Sudo pide password** - NOPASSWD eliminado
+4. **Sesión timeout 15 min** - TMOUT=900
+
+### Si pierdes acceso SSH:
+
+Usar **AWS EC2 Instance Connect** desde AWS Console (no requiere SSH).
+
+---
+
+**Documentación:** [README principal](../README.md) | [SIEM](../SIEM/README.md) | [WAF](../WAF/README.md) | [VPN-IAM](../VPN-IAM/README.md)
