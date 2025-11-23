@@ -281,12 +281,12 @@ Cambio desde us-east-1 por disponibilidad de instance types:
 
 **Lucas Rodriguez**
 GitHub: [@lr251516](https://github.com/lr251516)
-Email: lucasrodriguez@ort.edu.uy
+Email: lucasro01@gmail.com
 
 **Universidad ORT Uruguay**
-Analista en Infraestructura Informática
-Materia: Seguridad en Redes y Datos
-Grupo: N6A
-Año: 2025
+- **Analista en Infraestructura Informática**
+- **Materia: Seguridad en Redes y Datos**
+- **Grupo: N6A**
+- **Año: 2025**
 
 **Repositorio:** https://github.com/lr251516/obligatorio-seguridad-aws
