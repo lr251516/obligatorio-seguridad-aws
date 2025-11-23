@@ -318,13 +318,22 @@ resource "aws_security_group" "hardening" {
   description = "Security group for Hardening VM"
   vpc_id      = aws_vpc.main.id
 
-  # SSH desde mi IP (para testing)
+  # SSH puerto 22
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = [var.my_ip]
-    description = "SSH from my IP for testing"
+    description = "SSH port 22 from my IP (backup)"
+  }
+
+  # SSH puerto 2222 (post-hardening)
+  ingress {
+    from_port   = 2222
+    to_port     = 2222
+    protocol    = "tcp"
+    cidr_blocks = [var.my_ip]
+    description = "SSH port 2222 from my IP (hardened)"
   }
 
   # SSH desde VPN

@@ -205,10 +205,10 @@ systemctl daemon-reload && systemctl enable nginx && systemctl start nginx
 sed -i '/<\/ossec_config>$/i <localfile><log_format>syslog</log_format><location>/var/log/nginx/access.log</location></localfile><localfile><log_format>audit</log_format><location>/var/log/nginx/modsec_audit.log</location></localfile><localfile><log_format>syslog</log_format><location>/var/log/kong/access.log</location></localfile>' /var/ossec/etc/ossec.conf
 systemctl restart wazuh-agent
 
-# Kong backend
+# Configure Kong services automatically
 sleep 10
-curl -s -X POST http://127.0.0.1:8001/services/ -d "name=wazuh-backend" -d "url=https://10.0.1.20"
-curl -s -X POST http://127.0.0.1:8001/services/wazuh-backend/routes -d "paths[]=/wazuh"
-curl -s -X POST http://127.0.0.1:8001/services/wazuh-backend/plugins -d "name=rate-limiting" -d "config.minute=100"
+cd /opt/fosil/WAF/scripts
+chmod +x configure-kong-services.sh
+bash configure-kong-services.sh 2>&1 | tee -a /tmp/user-data.log || echo "Warning: configure-kong-services.sh failed" >> /tmp/user-data.log
 
 echo "WAF deployment complete">/tmp/user-data-completed.log

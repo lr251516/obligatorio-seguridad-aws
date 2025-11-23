@@ -6,7 +6,7 @@ timedatectl set-timezone America/Montevideo
 
 apt-get update
 apt-get upgrade -y
-apt-get install -y git curl wireguard-tools openjdk-17-jre-headless systemd-timesyncd
+apt-get install -y git curl wireguard-tools openjdk-17-jre-headless systemd-timesyncd jq
 
 # Configurar NTP después de asegurar que está instalado
 echo "NTP=0.uy.pool.ntp.org 1.uy.pool.ntp.org" >> /etc/systemd/timesyncd.conf
@@ -122,7 +122,7 @@ chmod 440 /etc/sudoers.d/keycloak
 # Obtener IP pública de la instancia
 PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
 
-# Configuración para permitir HTTP (proyecto académico)
+# Configuración para permitir HTTP 
 cat > /opt/keycloak/conf/keycloak.conf <<'KC'
 # Database
 db=postgres
