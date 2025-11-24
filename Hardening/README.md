@@ -49,7 +49,7 @@ ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw hardening_public_ip
 
 # Ejecutar script de hardening
 cd /opt/fosil/Hardening/scripts
-sudo bash apply-cis-hardening-ultra.sh
+sudo bash apply-cis-hardening.sh
 
 # VM reiniciará automáticamente en 10 seg
 ```
@@ -212,7 +212,7 @@ sudo fail2ban-client status sshd
 
 ### Scripts disponibles
 
-- **`apply-cis-hardening-ultra.sh`** - ✅ Script productivo (55+ checks, 65% SCA score)
+- **`apply-cis-hardening.sh`** - ✅ Script productivo (55+ checks, 65% SCA score)
 
 ### Configuraciones aplicadas
 

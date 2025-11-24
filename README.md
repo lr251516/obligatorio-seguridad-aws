@@ -31,25 +31,25 @@ Infraestructura de seguridad para **Fósil Energías Renovables S.A.** desplegad
 │                       us-west-2 (Oregon)                       │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                │
-│  ┌──────────────────┐         ┌──────────────────┐            │
-│  │  Wazuh SIEM      │◀────────│  WAF/Kong        │◀─── Internet
-│  │  10.0.1.20       │  agent  │  10.0.1.10       │    (Port 80)
-│  │  m7i-flex.large  │         │  ModSecurity     │            │
-│  │  (8GB RAM)       │         │  OWASP CRS       │            │
-│  └────────┬─────────┘         │  t3.micro        │            │
-│           │                   └──────────────────┘            │
-│           │ agents                                            │
-│           ▼                                                   │
-│  ┌──────────────────┐         ┌──────────────────┐            │
-│  │  VPN/IAM         │◀────────│  Hardening VM    │            │
-│  │  10.0.1.30       │  agent  │  10.0.1.40       │            │
-│  │  Keycloak        │         │  CIS L1 (65%)    │            │
-│  │  WireGuard       │         │  SSH port 2222   │            │
-│  │  IPSec Endpoint  │         │  t3.micro        │            │
-│  │  c7i-flex.large  │         └──────────────────┘            │
-│  │  (4GB RAM)       │                                         │
-│  └──────────────────┘                                         │
-│                                                               │
+│  ┌──────────────────┐         ┌──────────────────┐             │
+│  │  Wazuh SIEM      │◀────────│  WAF/Kong        │◀─── Internet│
+│  │  10.0.1.20       │  agent  │  10.0.1.10       │    (Port 80)│
+│  │  m7i-flex.large  │         │  ModSecurity     │             │
+│  │  (8GB RAM)       │         │  OWASP CRS       │             │
+│  └────────┬─────────┘         │  t3.micro        │             │
+│           │                   └──────────────────┘             │
+│           │ agents                                             │
+│           ▼                                                    │
+│  ┌──────────────────┐         ┌──────────────────┐             │
+│  │  VPN/IAM         │◀────────│  Hardening VM    │             │
+│  │  10.0.1.30       │  agent  │  10.0.1.40       │             │
+│  │  Keycloak        │         │  CIS L1 (65%)    │             │
+│  │  WireGuard       │         │  SSH port 2222   │             │
+│  │  IPSec Endpoint  │         │  t3.micro        │             │
+│  │  c7i-flex.large  │         └──────────────────┘             │
+│  │  (4GB RAM)       │                                          │
+│  └──────────────────┘                                          │
+│                                                                │
 └────────────────────────────────────────────────────────────────┘
          ▲
          │ IPSec Tunnel (IKEv2 + PSK)
