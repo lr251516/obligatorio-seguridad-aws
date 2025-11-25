@@ -44,4 +44,8 @@ aws-access-info.txt
 *.vdi
 *.vmdk
 *.iso
+
+# Internal documentation (not for repo)
 CLAUDE.md
+ARQUITECTURA.md
+REVISION.md
