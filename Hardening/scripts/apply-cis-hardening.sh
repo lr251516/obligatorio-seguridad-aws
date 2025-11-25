@@ -1,6 +1,5 @@
 #!/bin/bash
 # CIS Benchmark L1 - Ubuntu 22.04
-# Versión ULTRA - 50+ checks CIS sin romper el sistema
 set -e
 
 [ "$EUID" -ne 0 ] && { echo "Ejecutar como root"; exit 1; }
@@ -201,7 +200,7 @@ chmod 600 /boot/grub/grub.cfg 2>/dev/null || true
 chmod 600 /etc/crontab
 chmod 700 /etc/cron.d /etc/cron.daily /etc/cron.hourly /etc/cron.monthly /etc/cron.weekly
 chmod 644 /etc/issue /etc/issue.net
-chmod 644 /etc/motd
+[ -f /etc/motd ] && chmod 644 /etc/motd || true
 
 # /dev/shm noexec
 if ! grep -q "tmpfs /dev/shm" /etc/fstab; then
@@ -495,4 +494,4 @@ echo "Si pierdes conectividad, usa AWS Console para conectar"
 echo ""
 echo "Reiniciando en 10 seg (Ctrl+C para cancelar)..."
 sleep 10
-sudo systemctl reboot
+systemctl reboot

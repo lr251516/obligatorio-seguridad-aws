@@ -15,7 +15,7 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Variables - EDITAR ESTAS
+# Variables 
 read -p "IP pública de tu datacenter local (Multipass host): " DATACENTER_PUBLIC_IP
 read -sp "PSK (Pre-Shared Key - debe ser igual en ambos lados): " PSK
 echo ""

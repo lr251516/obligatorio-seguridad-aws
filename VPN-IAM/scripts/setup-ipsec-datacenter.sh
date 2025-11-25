@@ -15,7 +15,7 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Variables - EDITAR ESTAS
+# Variables
 read -p "IP pública de AWS VPN VM: " AWS_PUBLIC_IP
 read -sp "PSK (Pre-Shared Key - debe ser igual en AWS): " PSK
 echo ""
