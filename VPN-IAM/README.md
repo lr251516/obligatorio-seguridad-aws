@@ -11,6 +11,7 @@ Sistema dual de VPN (site-to-site + remote access) con gestión de identidad cen
 | **IAM** | Keycloak 23.0.0 + PostgreSQL | Identity Provider OAuth2/OIDC |
 | **VPN Site-to-Site** | IPSec (strongSwan IKEv2) | Datacenter local ↔ AWS VPC |
 | **VPN Remote Access** | WireGuard | Acceso usuarios con políticas por rol |
+| **Visualización** | Grafana + Keycloak OAuth2 | Dashboards con autenticación centralizada |
 
 **Estado:** ✅ Completamente funcional
 
@@ -113,7 +114,7 @@ sudo ./setup-ipsec-aws.sh
 ```
 
 **El script pedirá:**
-- IP pública de tu Mac/laptop (ejecutar: `curl https://api.ipify.org`)
+- IP pública local (`103.30.133.214`)
 - **Mismo PSK** usado en datacenter
 
 ### Verificar Conectividad
@@ -281,6 +282,133 @@ ping -c 3 10.0.1.20
 # Verificar AllowedIPs en config generado
 grep "AllowedIPs" /opt/fosil/vpn-configs/arodriguez-viewer.conf
 # Esperado: AllowedIPs = 10.0.1.20/32
+```
+
+---
+
+## 4. Grafana + OAuth2
+
+Dashboard de visualización con autenticación centralizada vía Keycloak.
+
+### Setup Grafana
+
+```bash
+# Grafana se instala automáticamente en VM dedicada (10.0.1.50)
+# durante terraform apply
+
+# Para acceder:
+export GRAFANA_IP=$(terraform output -raw grafana_public_ip)
+echo "Grafana: http://$GRAFANA_IP:3000"
+```
+
+**El script automáticamente:**
+1. Instala Grafana desde repositorio oficial
+2. Configura OAuth2 con cliente `grafana-oauth` de Keycloak
+3. Mapea roles Keycloak → roles Grafana
+4. Inicia servicio systemd
+
+### Acceso
+
+```
+URL: http://10.0.1.50:3000
+```
+
+**Login con Keycloak OAuth2:**
+- Click en "Sign in with Keycloak"
+- Usar cualquier usuario del realm "fosil"
+
+**Login local (admin):**
+- Usuario: `admin`
+- Password: `admin`
+
+### Mapeo de Roles
+
+Los roles de Keycloak se mapean automáticamente a permisos de Grafana:
+
+| Rol Keycloak | Rol Grafana | Permisos |
+|--------------|-------------|----------|
+| `infraestructura-admin` | **Admin** | Configuración completa, crear datasources, administrar usuarios |
+| `devops` | **Editor** | Crear/editar dashboards, no puede gestionar usuarios |
+| `viewer`, `auditor`, otros | **Viewer** | Solo lectura de dashboards |
+
+**Configuración técnica:**
+```ini
+role_attribute_path = contains(roles[*], 'infraestructura-admin') && 'Admin' || contains(roles[*], 'devops') && 'Editor' || 'Viewer'
+```
+
+### Verificar Integración OAuth2
+
+```bash
+# Verificar que cliente existe en Keycloak
+curl -s http://<VPN_IP>:8080/realms/fosil | jq '.["public_key"]'
+
+# Logs de Grafana
+sudo journalctl -u grafana-server -f
+
+# Verificar configuración
+sudo cat /etc/grafana/grafana.ini | grep -A 20 "\[auth.generic_oauth\]"
+```
+
+### Testing
+
+**Test 1: Login admin (infraestructura-admin)**
+```bash
+# Usuario: jperez@fosil.uy / Admin123!
+# Esperado: Rol Admin en Grafana
+# Puede: Crear datasources, administrar usuarios
+```
+
+**Test 2: Login editor (devops)**
+```bash
+# Usuario: mgonzalez@fosil.uy / DevOps123!
+# Esperado: Rol Editor en Grafana
+# Puede: Crear/editar dashboards
+# No puede: Configurar datasources
+```
+
+**Test 3: Login viewer**
+```bash
+# Usuario: arodriguez@fosil.uy / Viewer123!
+# Esperado: Rol Viewer en Grafana
+# Solo puede: Ver dashboards existentes
+```
+
+### Data Sources Recomendados
+
+Para integrar con la infraestructura existente:
+
+```bash
+# Prometheus (métricas de sistemas)
+URL: http://10.0.1.20:9090
+Type: Prometheus
+
+# Loki (logs agregados)
+URL: http://10.0.1.20:3100
+Type: Loki
+
+# Elasticsearch (índices Wazuh)
+URL: https://10.0.1.20:9200
+Type: Elasticsearch
+Index: wazuh-alerts-*
+```
+
+### Archivos de Configuración
+
+```bash
+# Config principal
+/etc/grafana/grafana.ini
+
+# Data sources
+/etc/grafana/provisioning/datasources/
+
+# Dashboards
+/etc/grafana/provisioning/dashboards/
+
+# Logs
+sudo journalctl -u grafana-server -f
+
+# Verificar status
+sudo systemctl status grafana-server
 ```
 
 ---

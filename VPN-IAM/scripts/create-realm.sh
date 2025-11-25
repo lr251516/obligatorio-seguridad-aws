@@ -97,37 +97,26 @@ sudo -u keycloak $KC_CLI update events/config -r $REALM \
 echo "[OK] Realm configurado"
 echo ""
 
-# Crear roles específicos para VPN
-echo "[3/6] Creando roles para políticas de VPN..."
+# Crear roles para Grafana
+echo "[3/6] Creando roles..."
 
-# Rol 1: Infraestructura Admin (acceso completo)
+# Rol 1: Admin (acceso completo a Grafana)
 sudo -u keycloak $KC_CLI create roles -r $REALM \
     -s name=infraestructura-admin \
-    -s 'description=Administradores de Infraestructura - Acceso completo VPN a toda la VPC (10.0.1.0/24)' \
+    -s 'description=Administradores - Acceso completo a Grafana (Admin)' \
     2>/dev/null || echo "ℹ️  Rol 'infraestructura-admin' ya existe"
 
-# Rol 2: DevOps (acceso a SIEM y WAF)
+# Rol 2: Editor (crear/editar dashboards)
 sudo -u keycloak $KC_CLI create roles -r $REALM \
     -s name=devops \
-    -s 'description=DevOps - Acceso VPN a Wazuh SIEM (10.0.1.20) y WAF/Kong (10.0.1.10)' \
+    -s 'description=Editores - Crear y editar dashboards en Grafana (Editor)' \
     2>/dev/null || echo "ℹ️  Rol 'devops' ya existe"
 
-# Rol 3: Viewer (solo lectura SIEM)
+# Rol 3: Viewer (solo lectura)
 sudo -u keycloak $KC_CLI create roles -r $REALM \
     -s name=viewer \
-    -s 'description=Viewer - Acceso VPN de solo lectura a Wazuh Dashboard (10.0.1.20)' \
+    -s 'description=Visualizadores - Solo lectura de dashboards en Grafana (Viewer)' \
     2>/dev/null || echo "ℹ️  Rol 'viewer' ya existe"
-
-# Roles adicionales para contexto empresarial
-sudo -u keycloak $KC_CLI create roles -r $REALM \
-    -s name=operador-telemetria \
-    -s 'description=Operadores de Telemetría IoT - Acceso a APIs de telemetría' \
-    2>/dev/null || echo "ℹ️  Rol 'operador-telemetria' ya existe"
-
-sudo -u keycloak $KC_CLI create roles -r $REALM \
-    -s name=auditor \
-    -s 'description=Auditores de Seguridad - Acceso de solo lectura a logs' \
-    2>/dev/null || echo "ℹ️  Rol 'auditor' ya existe"
 
 echo "[OK] Roles creados"
 echo ""
@@ -206,65 +195,32 @@ create_user \
     "viewer" \
     "Viewer123!"
 
-# Usuario 4: Operador Telemetría
-create_user \
-    "cmartinez" \
-    "cmartinez@fosil.uy" \
-    "Carlos" \
-    "Martínez" \
-    "operador-telemetria" \
-    "Telemetria123!"
-
-# Usuario 5: Auditor
-create_user \
-    "lsanchez" \
-    "lsanchez@fosil.uy" \
-    "Laura" \
-    "Sánchez" \
-    "auditor" \
-    "Auditor123!"
-
 echo ""
 echo "[OK] Usuarios creados"
 echo ""
 
 # Crear clientes OAuth2/OIDC
-echo "[5/6] Creando clientes OAuth2/OIDC..."
+echo "[5/6] Creando cliente OAuth2 para Grafana..."
 
-# Cliente: Kong API Gateway
-echo "[+] Cliente: Kong API Gateway"
+# Cliente: Grafana Dashboard
+echo "[+] Cliente: Grafana Dashboard"
 sudo -u keycloak $KC_CLI create clients -r $REALM \
-    -s clientId=kong-api \
-    -s 'name=Kong API Gateway' \
+    -s clientId=grafana-oauth \
+    -s 'name=Grafana Dashboard' \
     -s enabled=true \
     -s clientAuthenticatorType=client-secret \
-    -s secret=kong-secret-2024 \
+    -s secret=grafana-secret-2024 \
     -s publicClient=false \
     -s protocol=openid-connect \
-    -s 'redirectUris=["http://10.0.1.10:8000/*","http://10.0.1.10:8443/*","https://10.0.1.10:8443/*"]' \
+    -s 'redirectUris=["http://10.0.1.40:3000/*","http://10.0.1.40:3000/login/generic_oauth"]' \
     -s 'webOrigins=["*"]' \
+    -s standardFlowEnabled=true \
     -s directAccessGrantsEnabled=true \
-    -s serviceAccountsEnabled=true \
-    -s standardFlowEnabled=true \
     -s implicitFlowEnabled=false \
-    2>/dev/null || echo "ℹ️  Cliente 'kong-api' ya existe"
+    -s 'defaultClientScopes=["email","profile","roles","offline_access"]' \
+    2>/dev/null || echo "ℹ️  Cliente 'grafana-oauth' ya existe"
 
-# Cliente: Wazuh Dashboard (opcional para futuras integraciones)
-echo "[+] Cliente: Wazuh Dashboard"
-sudo -u keycloak $KC_CLI create clients -r $REALM \
-    -s clientId=wazuh-dashboard \
-    -s 'name=Wazuh Dashboard' \
-    -s enabled=true \
-    -s clientAuthenticatorType=client-secret \
-    -s secret=wazuh-secret-2024 \
-    -s publicClient=false \
-    -s protocol=openid-connect \
-    -s 'redirectUris=["https://10.0.1.20/*"]' \
-    -s 'webOrigins=["*"]' \
-    -s standardFlowEnabled=true \
-    2>/dev/null || echo "ℹ️  Cliente 'wazuh-dashboard' ya existe"
-
-echo "[OK] Clientes OAuth2 creados"
+echo "[OK] Cliente OAuth2 creado"
 echo ""
 
 # Resumen final
@@ -282,31 +238,34 @@ echo "🌐 URL: $SERVER/realms/$REALM"
 echo ""
 echo "👥 USUARIOS CREADOS:"
 echo ""
-echo "  1. jperez@fosil.uy         | Admin123!        | infraestructura-admin"
-echo "  2. mgonzalez@fosil.uy      | DevOps123!       | devops"
-echo "  3. arodriguez@fosil.uy     | Viewer123!       | viewer"
-echo "  4. cmartinez@fosil.uy      | Telemetria123!   | operador-telemetria"
-echo "  5. lsanchez@fosil.uy       | Auditor123!      | auditor"
+echo "  1. jperez@fosil.uy         | Admin123!   | infraestructura-admin (Grafana Admin)"
+echo "  2. mgonzalez@fosil.uy      | DevOps123!  | devops (Grafana Editor)"
+echo "  3. arodriguez@fosil.uy     | Viewer123!  | viewer (Grafana Viewer)"
 echo ""
-echo "🔑 CLIENTES OAUTH2/OIDC:"
+echo "🔑 CLIENTE OAUTH2:"
 echo ""
-echo "  - kong-api         | Secret: kong-secret-2024"
-echo "  - wazuh-dashboard  | Secret: wazuh-secret-2024"
+echo "  - grafana-oauth    | Secret: grafana-secret-2024"
 echo ""
-echo "📊 EVENT LOGGING:"
+echo "📊 GRAFANA:"
 echo ""
-echo "  [OK] Eventos habilitados (LOGIN, LOGIN_ERROR, LOGOUT, etc.)"
-echo "  [OK] Eventos de admin habilitados"
-echo "  ℹ️  Configurar logs → Wazuh para analítica de comportamiento"
+echo "  URL: http://10.0.1.40:3000"
+echo "  Autenticación: Click 'Sign in with Keycloak'"
+echo ""
+echo "  Mapeo de roles:"
+echo "    infraestructura-admin → Grafana Admin (full access)"
+echo "    devops                → Grafana Editor (crear/editar dashboards)"
+echo "    viewer                → Grafana Viewer (solo lectura)"
 echo ""
 echo " PRÓXIMOS PASOS:"
 echo ""
-echo "  1. Configurar event logging → Wazuh SIEM"
-echo "  2. Integrar Kong con OIDC plugin"
-echo "  3. Generar configs VPN con: ./vpn-config-generator.sh <email>"
+echo "  1. Instalar Grafana:"
+echo "     cd /opt/fosil/VPN-IAM/scripts"
+echo "     sudo ./install-grafana.sh"
 echo ""
-echo " GENERAR CONFIG VPN EJEMPLO:"
+echo "  2. Acceder a Grafana:"
+echo "     http://10.0.1.40:3000"
+echo "     Click 'Sign in with Keycloak'"
 echo ""
-echo "  export VPN_SERVER_PUBLIC_IP=\$(terraform output -raw vpn_public_ip)"
-echo "  ./vpn-config-generator.sh jperez@fosil.uy"
+echo "  3. Probar con usuarios:"
+echo "     jperez@fosil.uy (Admin), mgonzalez@fosil.uy (Editor), arodriguez@fosil.uy (Viewer)"
 echo ""
