@@ -12,13 +12,13 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
-  
+
   default_tags {
     tags = {
-      Project     = "Obligatorio-SRD"
-      University  = "ORT-Uruguay"
-      Group       = "N6A"
-      ManagedBy   = "Terraform"
+      Project    = "Obligatorio-SRD"
+      University = "ORT-Uruguay"
+      Group      = "N6A"
+      ManagedBy  = "Terraform"
     }
   }
 }
@@ -383,6 +383,52 @@ resource "aws_security_group" "hardening" {
   }
 }
 
+# Security Group - Grafana
+resource "aws_security_group" "grafana" {
+  name        = "fosil-grafana-sg"
+  description = "Security group for Grafana Dashboard"
+  vpc_id      = aws_vpc.main.id
+
+  # SSH desde mi IP
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.my_ip]
+    description = "SSH from my IP"
+  }
+
+  # Grafana HTTP (puerto 3000) desde internet
+  ingress {
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Grafana Dashboard HTTP"
+  }
+
+  # Tráfico interno VPC (para comunicación con Keycloak)
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["10.0.0.0/16"]
+    description = "Internal VPC traffic"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
+  }
+
+  tags = {
+    Name = "fosil-grafana-sg"
+  }
+}
+
 # Data source para obtener la AMI de Ubuntu más reciente
 data "aws_ami" "ubuntu" {
   most_recent = true
@@ -439,11 +485,11 @@ resource "aws_instance" "wazuh" {
 
 # EC2 Instance - VPN/IAM
 resource "aws_instance" "vpn" {
-  ami                    = data.aws_ami.ubuntu.id
-  instance_type          = var.vpn_instance_type
-  key_name               = aws_key_pair.deployer.key_name
-  subnet_id              = aws_subnet.public.id
-  source_dest_check      = false  # Requerido para NAT/routing VPN
+  ami               = data.aws_ami.ubuntu.id
+  instance_type     = var.vpn_instance_type
+  key_name          = aws_key_pair.deployer.key_name
+  subnet_id         = aws_subnet.public.id
+  source_dest_check = false # Requerido para NAT/routing VPN
 
   vpc_security_group_ids = [aws_security_group.vpn.id]
 
@@ -507,6 +553,40 @@ resource "aws_instance" "hardening" {
   tags = {
     Name = "fosil-hardening"
     Role = "Hardening"
+  }
+}
+
+# VM Grafana (10.0.1.50)
+resource "aws_instance" "grafana" {
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = "t3.micro"
+  key_name      = aws_key_pair.deployer.key_name
+  subnet_id     = aws_subnet.public.id
+
+  vpc_security_group_ids = [aws_security_group.grafana.id]
+
+  private_ip = "10.0.1.50"
+
+  root_block_device {
+    volume_size = 20
+    volume_type = "gp3"
+  }
+
+  user_data = file("${path.module}/user-data/grafana-init.sh")
+
+  tags = {
+    Name = "fosil-grafana"
+    Role = "Grafana"
+  }
+}
+
+# Elastic IP - Grafana
+resource "aws_eip" "grafana" {
+  instance = aws_instance.grafana.id
+  domain   = "vpc"
+
+  tags = {
+    Name = "fosil-grafana-eip"
   }
 }
 

@@ -11,7 +11,7 @@ Wazuh SIEM con 17 reglas personalizadas implementando 4 casos de uso de detecci�
 | **Wazuh Manager** | 4.13.0 | SIEM central, procesamiento reglas |
 | **Wazuh Indexer** | 4.13.0 | OpenSearch para almacenamiento logs |
 | **Wazuh Dashboard** | 4.13.0 | UI web análisis y visualización |
-| **Wazuh Agents** | 4.13.0 | 4 agentes monitoreando VMs |
+| **Wazuh Agents** | 4.13.0 | 5 agentes monitoreando VMs |
 
 **Estado:** ✅ 100% funcional - 4 casos de uso testeados
 
@@ -36,7 +36,7 @@ ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw wazuh_public_ip)
 sudo /var/ossec/bin/agent_control -l
 ```
 
-**Esperado:** 4 agentes en estado `Active`
+**Esperado:** 5 agentes en estado `Active` (wazuh-siem, waf-kong, vpn-iam, hardening-vm, grafana)
 
 ---
 
