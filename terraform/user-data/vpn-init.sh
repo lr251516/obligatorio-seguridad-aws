@@ -6,7 +6,7 @@ timedatectl set-timezone America/Montevideo
 
 apt-get update
 apt-get upgrade -y
-apt-get install -y git curl wireguard-tools openjdk-17-jre-headless systemd-timesyncd jq
+apt-get install -y git curl wireguard wireguard-tools resolvconf openjdk-17-jre-headless systemd-timesyncd jq
 
 # Configurar NTP después de asegurar que está instalado
 echo "NTP=0.uy.pool.ntp.org 1.uy.pool.ntp.org" >> /etc/systemd/timesyncd.conf
@@ -184,9 +184,22 @@ systemctl daemon-reload
 systemctl enable keycloak
 systemctl start keycloak
 
-# Esperar que Keycloak esté listo
-echo "[$(date)] Esperando que Keycloak inicie..." >> /tmp/user-data.log
-sleep 45
+# Esperar que Keycloak esté listo con health check
+echo "[$(date)] Esperando que Keycloak esté completamente listo..." >> /tmp/user-data.log
+RETRIES=0
+MAX_RETRIES=30
+until curl -s http://localhost:8080/health/ready | grep -q "UP" || [ $RETRIES -eq $MAX_RETRIES ]; do
+  echo "[$(date)] Keycloak aún no está listo, esperando... (intento $((RETRIES+1))/$MAX_RETRIES)" >> /tmp/user-data.log
+  sleep 10
+  RETRIES=$((RETRIES+1))
+done
+
+if [ $RETRIES -eq $MAX_RETRIES ]; then
+  echo "[$(date)] ERROR: Keycloak no respondió después de 5 minutos" >> /tmp/user-data.log
+  exit 1
+fi
+
+echo "[$(date)] Keycloak está listo!" >> /tmp/user-data.log
 
 # Configurar realm master para permitir HTTP
 echo "[$(date)] Configurando realm master para HTTP..." >> /tmp/user-data.log
@@ -200,15 +213,66 @@ sudo -u keycloak bin/kcadm.sh config credentials \
 sudo -u keycloak bin/kcadm.sh update realms/master \
   -s sslRequired=NONE 2>&1 | tee -a /tmp/user-data.log
 
-# Crear realm fosil automáticamente 
-echo "[$(date)] Creando realm fosil en modo automático..." >> /tmp/user-data.log
-sleep 10
+# Crear realm fosil automáticamente
+echo "[$(date)] Creando realm 'fosil' con usuarios y cliente OAuth2 Grafana..." >> /tmp/user-data.log
+sleep 5
 cd /opt/fosil/VPN-IAM/scripts
-sudo -u keycloak /opt/fosil/VPN-IAM/scripts/create-realm.sh --auto 2>&1 | tee -a /tmp/user-data.log || echo "Warning: create-realm.sh falló, verificar en /tmp/user-data.log" >> /tmp/user-data.log
+sudo -u ubuntu /opt/fosil/VPN-IAM/scripts/create-realm.sh --auto 2>&1 | tee -a /tmp/user-data.log
 
-echo "VPN/IAM init completed with Wazuh agent + Keycloak" > /tmp/user-data-completed.log
-echo "Keycloak: http://10.0.1.30:8080 (admin/admin)" >> /tmp/user-data-completed.log
-echo "Keycloak realm master configurado para HTTP" >> /tmp/user-data-completed.log
-echo "Keycloak realm 'fosil' creado automáticamente con 5 usuarios" >> /tmp/user-data-completed.log
-echo "Ver detalles en: /tmp/user-data.log" >> /tmp/user-data-completed.log
+if [ $? -eq 0 ]; then
+  echo "[$(date)] Realm 'fosil' creado exitosamente" >> /tmp/user-data.log
+else
+  echo "[$(date)] ERROR: create-realm.sh falló, verificar logs arriba" >> /tmp/user-data.log
+fi
+
+# Configurar servidor VPN WireGuard automáticamente
+echo "[$(date)] Configurando servidor VPN WireGuard..." >> /tmp/user-data.log
+cd /opt/fosil/VPN-IAM/scripts
+sudo /opt/fosil/VPN-IAM/scripts/setup-vpn-server.sh 2>&1 | tee -a /tmp/user-data.log
+
+if [ $? -eq 0 ]; then
+  echo "[$(date)] Servidor VPN WireGuard configurado exitosamente" >> /tmp/user-data.log
+
+  # Guardar información del servidor VPN para fácil acceso
+  VPN_PUBLIC_KEY=$(cat /etc/wireguard/public.key 2>/dev/null || echo "N/A")
+  VPN_PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+
+  echo "" >> /tmp/user-data.log
+  echo "=== VPN Server Info ===" >> /tmp/user-data.log
+  echo "Public IP: $VPN_PUBLIC_IP" >> /tmp/user-data.log
+  echo "Public Key: $VPN_PUBLIC_KEY" >> /tmp/user-data.log
+  echo "Port: 51820" >> /tmp/user-data.log
+  echo "======================" >> /tmp/user-data.log
+else
+  echo "[$(date)] ERROR: setup-vpn-server.sh falló, verificar logs arriba" >> /tmp/user-data.log
+fi
+
+echo "VPN/IAM init completed with Wazuh agent + Keycloak + Realm 'fosil' + WireGuard VPN" > /tmp/user-data-completed.log
+echo "" >> /tmp/user-data-completed.log
+echo "Keycloak Admin Console: http://10.0.1.30:8080 (admin/admin)" >> /tmp/user-data-completed.log
+echo "Realm: fosil" >> /tmp/user-data-completed.log
+echo "" >> /tmp/user-data-completed.log
+echo "Usuarios creados (3):" >> /tmp/user-data-completed.log
+echo "  - jperez@fosil.uy (Admin123!) - infraestructura-admin → Grafana Admin" >> /tmp/user-data-completed.log
+echo "  - mgonzalez@fosil.uy (DevOps123!) - devops → Grafana Editor" >> /tmp/user-data-completed.log
+echo "  - arodriguez@fosil.uy (Viewer123!) - viewer → Grafana Viewer" >> /tmp/user-data-completed.log
+echo "" >> /tmp/user-data-completed.log
+echo "Cliente OAuth2 creado:" >> /tmp/user-data-completed.log
+echo "  - grafana-oauth (Secret: grafana-secret-2024)" >> /tmp/user-data-completed.log
+echo "" >> /tmp/user-data-completed.log
+echo "WireGuard VPN Server:" >> /tmp/user-data-completed.log
+VPN_PUBLIC_KEY_DISPLAY=$(cat /etc/wireguard/public.key 2>/dev/null || echo "N/A")
+VPN_PUBLIC_IP_DISPLAY=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "N/A")
+echo "  - Public IP: $VPN_PUBLIC_IP_DISPLAY" >> /tmp/user-data-completed.log
+echo "  - Public Key: $VPN_PUBLIC_KEY_DISPLAY" >> /tmp/user-data-completed.log
+echo "  - Port: 51820 (UDP)" >> /tmp/user-data-completed.log
+echo "  - Status: sudo wg show" >> /tmp/user-data-completed.log
+echo "" >> /tmp/user-data-completed.log
+echo "Generar config VPN para usuario:" >> /tmp/user-data-completed.log
+echo "  cd /opt/fosil/VPN-IAM/scripts" >> /tmp/user-data-completed.log
+echo "  export VPN_SERVER_PUBLIC_IP=$VPN_PUBLIC_IP_DISPLAY" >> /tmp/user-data-completed.log
+echo "  export VPN_SERVER_PUBLIC_KEY=$VPN_PUBLIC_KEY_DISPLAY" >> /tmp/user-data-completed.log
+echo "  ./vpn-config-generator.sh jperez@fosil.uy" >> /tmp/user-data-completed.log
+echo "" >> /tmp/user-data-completed.log
+echo "Ver logs detallados en: /tmp/user-data.log" >> /tmp/user-data-completed.log
 date >> /tmp/user-data-completed.log
