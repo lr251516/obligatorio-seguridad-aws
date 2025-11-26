@@ -184,22 +184,9 @@ systemctl daemon-reload
 systemctl enable keycloak
 systemctl start keycloak
 
-# Esperar que Keycloak esté listo con health check
-echo "[$(date)] Esperando que Keycloak esté completamente listo..." >> /tmp/user-data.log
-RETRIES=0
-MAX_RETRIES=30
-until curl -s http://localhost:8080/health/ready | grep -q "UP" || [ $RETRIES -eq $MAX_RETRIES ]; do
-  echo "[$(date)] Keycloak aún no está listo, esperando... (intento $((RETRIES+1))/$MAX_RETRIES)" >> /tmp/user-data.log
-  sleep 10
-  RETRIES=$((RETRIES+1))
-done
-
-if [ $RETRIES -eq $MAX_RETRIES ]; then
-  echo "[$(date)] ERROR: Keycloak no respondió después de 5 minutos" >> /tmp/user-data.log
-  exit 1
-fi
-
-echo "[$(date)] Keycloak está listo!" >> /tmp/user-data.log
+# Esperar que Keycloak esté listo
+echo "[$(date)] Esperando que Keycloak inicie..." >> /tmp/user-data.log
+sleep 45
 
 # Configurar realm master para permitir HTTP
 echo "[$(date)] Configurando realm master para HTTP..." >> /tmp/user-data.log
@@ -221,6 +208,12 @@ sudo -u ubuntu /opt/fosil/VPN-IAM/scripts/create-realm.sh --auto 2>&1 | tee -a /
 
 if [ $? -eq 0 ]; then
   echo "[$(date)] Realm 'fosil' creado exitosamente" >> /tmp/user-data.log
+
+  # Configurar realm fosil para permitir HTTP también
+  echo "[$(date)] Configurando realm fosil para HTTP..." >> /tmp/user-data.log
+  cd /opt/keycloak
+  sudo -u keycloak bin/kcadm.sh update realms/fosil \
+    -s sslRequired=NONE 2>&1 | tee -a /tmp/user-data.log
 else
   echo "[$(date)] ERROR: create-realm.sh falló, verificar logs arriba" >> /tmp/user-data.log
 fi

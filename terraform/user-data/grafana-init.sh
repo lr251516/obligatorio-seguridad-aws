@@ -72,7 +72,23 @@ systemctl start wazuh-agent
 echo "[$(date)] Instalando Grafana..." >> /tmp/user-data.log
 
 # Variables para OAuth2
-KEYCLOAK_SERVER="http://10.0.1.30:8080"
+# Obtener IP pública de la instancia VPN (10.0.1.30) usando AWS CLI
+VPN_PUBLIC_IP=$(aws ec2 describe-instances \
+  --region us-west-2 \
+  --filters "Name=private-ip-address,Values=10.0.1.30" "Name=instance-state-name,Values=running" \
+  --query 'Reservations[0].Instances[0].PublicIpAddress' \
+  --output text 2>/dev/null)
+
+# Fallback a IP privada si no se puede obtener la pública
+if [ -z "$VPN_PUBLIC_IP" ] || [ "$VPN_PUBLIC_IP" = "None" ]; then
+  VPN_PUBLIC_IP="10.0.1.30"
+  echo "[WARN] No se pudo obtener IP pública de VPN, usando IP privada" >> /tmp/user-data.log
+fi
+
+# Obtener IP pública de esta instancia (Grafana)
+GRAFANA_PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+
+KEYCLOAK_SERVER="http://${VPN_PUBLIC_IP}:8080"
 KEYCLOAK_REALM="fosil"
 GRAFANA_CLIENT_ID="grafana-oauth"
 GRAFANA_CLIENT_SECRET="grafana-secret-2024"
@@ -90,8 +106,8 @@ apt-get install -y grafana
 cat > /etc/grafana/grafana.ini <<EOF
 [server]
 http_port = 3000
-domain = 10.0.1.50
-root_url = http://10.0.1.50:3000
+domain = ${GRAFANA_PUBLIC_IP}
+root_url = http://${GRAFANA_PUBLIC_IP}:3000
 
 [auth]
 # Permitir login local (admin) además de OAuth
@@ -162,7 +178,7 @@ echo "" >> /tmp/user-data-completed.log
 echo "  2. Login local (admin/admin)" >> /tmp/user-data-completed.log
 echo "" >> /tmp/user-data-completed.log
 echo "Keycloak OAuth2 configurado:" >> /tmp/user-data-completed.log
-echo "  - Server: http://10.0.1.30:8080" >> /tmp/user-data-completed.log
+echo "  - Server: ${KEYCLOAK_SERVER}" >> /tmp/user-data-completed.log
 echo "  - Realm: fosil" >> /tmp/user-data-completed.log
 echo "  - Client ID: grafana-oauth" >> /tmp/user-data-completed.log
 echo "" >> /tmp/user-data-completed.log

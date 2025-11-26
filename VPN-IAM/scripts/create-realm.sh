@@ -212,7 +212,7 @@ sudo -u keycloak $KC_CLI create clients -r $REALM \
     -s secret=grafana-secret-2024 \
     -s publicClient=false \
     -s protocol=openid-connect \
-    -s 'redirectUris=["http://10.0.1.40:3000/*","http://10.0.1.40:3000/login/generic_oauth"]' \
+    -s 'redirectUris=["http://*:3000/*","http://10.0.1.50:3000/*"]' \
     -s 'webOrigins=["*"]' \
     -s standardFlowEnabled=true \
     -s directAccessGrantsEnabled=true \
@@ -221,6 +221,25 @@ sudo -u keycloak $KC_CLI create clients -r $REALM \
     2>/dev/null || echo "ℹ️  Cliente 'grafana-oauth' ya existe"
 
 echo "[OK] Cliente OAuth2 creado"
+
+# Obtener ID del cliente para agregar mapper
+CLIENT_ID=$(sudo -u keycloak $KC_CLI get clients -r $REALM -q clientId=grafana-oauth 2>/dev/null | jq -r '.[0].id')
+
+if [ -n "$CLIENT_ID" ] && [ "$CLIENT_ID" != "null" ]; then
+  echo "[+] Configurando mapper de roles para Grafana..."
+  sudo -u keycloak $KC_CLI create clients/$CLIENT_ID/protocol-mappers/models -r $REALM \
+    -s name=roles \
+    -s protocol=openid-connect \
+    -s protocolMapper=oidc-usermodel-realm-role-mapper \
+    -s 'config."claim.name"=roles' \
+    -s 'config."jsonType.label"=String' \
+    -s 'config."id.token.claim"=true' \
+    -s 'config."access.token.claim"=true' \
+    -s 'config."userinfo.token.claim"=true' \
+    -s 'config."multivalued"=true' \
+    2>/dev/null || echo "ℹ️  Mapper 'roles' ya existe"
+  echo "[OK] Mapper de roles configurado"
+fi
 echo ""
 
 # Resumen final
