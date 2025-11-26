@@ -170,6 +170,15 @@ Opción 1 - OAuth2: Click "Sign in with Keycloak"
 Opción 2 - Local: admin / admin
 ```
 
+### Kong Gateway
+
+```
+Proxy (público):     http://<WAF_IP>:8000
+Admin API:           http://<WAF_IP>:8001  (JSON REST API)
+Admin GUI:           http://<WAF_IP>:8002  (Interfaz Web)
+WAF (ModSecurity):   http://<WAF_IP>       (puerto 80)
+```
+
 **⚠️ Proyecto académico:** HTTP sin TLS.
 
 ---

@@ -208,13 +208,19 @@ PostgreSQL en localhost:5432 (DB: kong)
 /var/log/kong/access.log
 /var/log/kong/error.log
 
-# Admin API
-http://10.0.1.10:8001 (interno)
-
-# Proxy
-http://10.0.1.10:8000 (interno)
-http://<PUBLIC_IP>:80 (externo)
+# Endpoints
+http://10.0.1.10:8000 (Proxy - interno)
+http://<PUBLIC_IP>:8000 (Proxy - público)
+http://<PUBLIC_IP>:8001 (Admin API - JSON REST)
+http://<PUBLIC_IP>:8002 (Admin GUI - Interfaz Web)
+http://<PUBLIC_IP>:80   (WAF ModSecurity - público)
 ```
+
+**Acceso desde navegador:**
+- **Kong Admin GUI:** `http://<WAF_IP>:8002` - Interfaz gráfica para gestión
+- **Kong Admin API:** `http://<WAF_IP>:8001` - API REST (JSON)
+- **Kong Proxy:** `http://<WAF_IP>:8000` - Gateway público
+- **WAF:** `http://<WAF_IP>` - Nginx + ModSecurity (puerto 80)
 
 ### ModSecurity + OWASP CRS
 

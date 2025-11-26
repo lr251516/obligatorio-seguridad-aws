@@ -44,22 +44,24 @@ curl -s http://<VPN_IP>:8080/realms/fosil | jq .realm
 
 **Realm incluye:**
 
-**5 Roles definidos:**
-- `infraestructura-admin`: Full access VPC (10.0.1.0/24)
-- `devops`: SIEM + WAF (10.0.1.20, 10.0.1.10)
-- `viewer`: Solo SIEM read-only (10.0.1.20)
-- `security-admin`: Gestión de seguridad
-- `auditor`: Acceso read-only a logs
+**3 Roles definidos:**
+- `infraestructura-admin`: Full access VPC (10.0.1.0/24) → Grafana Admin
+- `devops`: SIEM + WAF (10.0.1.20, 10.0.1.10) → Grafana Editor
+- `viewer`: Solo SIEM read-only (10.0.1.20) → Grafana Viewer
 
-**Usuarios de prueba:**
+**3 Usuarios de prueba:**
 
-| Email | Password | Rol |
-|-------|----------|-----|
-| jperez@fosil.uy | Admin123! | infraestructura-admin |
-| mgonzalez@fosil.uy | DevOps123! | devops |
-| arodriguez@fosil.uy | Viewer123! | viewer |
-| csanchez@fosil.uy | Security123! | security-admin |
-| lmartinez@fosil.uy | Auditor123! | auditor |
+| Email | Password | Rol | Grafana Role |
+|-------|----------|-----|--------------|
+| jperez@fosil.uy | Admin123! | infraestructura-admin | Admin |
+| mgonzalez@fosil.uy | DevOps123! | devops | Editor |
+| arodriguez@fosil.uy | Viewer123! | viewer | Viewer |
+
+**1 Cliente OAuth2:**
+- `grafana-oauth`: Cliente para autenticación Grafana
+  - Client Secret: `grafana-secret-2024`
+  - Redirect URIs: `http://*:3000/*` (wildcard para IPs públicas/privadas)
+  - Protocol Mapper: Incluye roles en token para mapeo automático
 
 ---
 
@@ -197,10 +199,61 @@ sudo wg-quick down ~/jperez-infraestructura-admin.conf
 | `infraestructura-admin` | `10.0.1.0/24` (todas las VMs) |
 | `devops` | `10.0.1.20/32, 10.0.1.10/32` (SIEM + WAF) |
 | `viewer` | `10.0.1.20/32` (solo SIEM) |
-| `security-admin` | `10.0.1.20/32, 10.0.1.10/32, 10.0.1.40/32` (SIEM + WAF + Hardening) |
-| `auditor` | `10.0.1.20/32` (solo SIEM read-only) |
 
 **Implementación automática:** El script `vpn-config-generator.sh` lee roles desde Keycloak y genera AllowedIPs dinámicamente.
+
+---
+
+## 4. Integración OAuth2 con Grafana
+
+Grafana está configurado para autenticación centralizada con Keycloak OAuth2.
+
+### Configuración Automática
+
+El deployment automático configura:
+1. **Grafana** con OAuth2 client (`grafana-oauth`)
+2. **Keycloak** con protocol mapper para incluir roles
+3. **Mapeo automático** de roles Keycloak → Grafana
+
+### Acceso a Grafana
+
+```
+URL: http://<GRAFANA_IP>:3000
+```
+
+**Opción 1 - OAuth2 (Recomendado):**
+1. Click en "Sign in with Keycloak"
+2. Login con usuario Keycloak:
+   - `jperez@fosil.uy` / `Admin123!` → Grafana Admin
+   - `mgonzalez@fosil.uy` / `DevOps123!` → Grafana Editor
+   - `arodriguez@fosil.uy` / `Viewer123!` → Grafana Viewer
+
+**Opción 2 - Local:**
+- Usuario: `admin`
+- Password: `admin`
+
+### Mapeo de Roles
+
+El mapeo se configura automáticamente en `/etc/grafana/grafana.ini`:
+
+```ini
+[auth.generic_oauth]
+role_attribute_path = contains(roles[*], 'infraestructura-admin') && 'Admin' || contains(roles[*], 'devops') && 'Editor' || 'Viewer'
+```
+
+| Rol Keycloak | Rol Grafana | Permisos |
+|--------------|-------------|----------|
+| `infraestructura-admin` | Admin | Full access (users, data sources, settings) |
+| `devops` | Editor | Crear/editar dashboards, NO admin |
+| `viewer` | Viewer | Solo lectura |
+
+### Verificar Configuración
+
+```bash
+# Ver configuración OAuth2
+ssh -i ~/.ssh/obligatorio-srd ubuntu@<GRAFANA_IP>
+sudo grep -A 15 '\[auth.generic_oauth\]' /etc/grafana/grafana.ini
+```
 
 ---
 
