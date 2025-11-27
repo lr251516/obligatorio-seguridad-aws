@@ -140,6 +140,9 @@ hostname-strict=false
 
 # Logs
 log-level=INFO
+log=console,file
+log-file=/opt/keycloak/data/log/keycloak.log
+log-file-output=json
 
 # Features
 metrics-enabled=true
@@ -187,6 +190,26 @@ systemctl start keycloak
 # Esperar que Keycloak esté listo
 echo "[$(date)] Esperando que Keycloak inicie..." >> /tmp/user-data.log
 sleep 45
+
+# Crear directorio de logs Keycloak si no existe
+mkdir -p /opt/keycloak/data/log
+chown keycloak:keycloak /opt/keycloak/data/log
+
+# Esperar a que keycloak.log se cree
+echo "[$(date)] Esperando archivo de log de Keycloak..." >> /tmp/user-data.log
+RETRIES=0
+while [ ! -f /opt/keycloak/data/log/keycloak.log ] && [ $RETRIES -lt 30 ]; do
+  sleep 2
+  RETRIES=$((RETRIES+1))
+done
+
+# Agregar monitoreo de keycloak.log a Wazuh
+if [ -f /opt/keycloak/data/log/keycloak.log ]; then
+  echo "[$(date)] Agregando keycloak.log a Wazuh agent..." >> /tmp/user-data.log
+  sed -i '/<\/ossec_config>$/i \  <localfile>\n    <log_format>json</log_format>\n    <location>/opt/keycloak/data/log/keycloak.log</location>\n  </localfile>' /var/ossec/etc/ossec.conf
+  systemctl restart wazuh-agent
+  echo "[$(date)] Wazuh agent reiniciado con monitoreo de Keycloak" >> /tmp/user-data.log
+fi
 
 # Configurar realm master para permitir HTTP
 echo "[$(date)] Configurando realm master para HTTP..." >> /tmp/user-data.log

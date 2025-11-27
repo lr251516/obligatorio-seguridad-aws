@@ -169,7 +169,7 @@
   <!-- Login fallido en Keycloak -->
   <rule id="100040" level="5">
     <decoded_as>json</decoded_as>
-    <field name="type">LOGIN_ERROR</field>
+    <field name="message">type=LOGIN_ERROR</field>
     <description>Keycloak: Intento de login fallido</description>
   </rule>
 
@@ -185,7 +185,7 @@
   <!-- Login desde IP externa -->
   <rule id="100042" level="8">
     <if_sid>100040</if_sid>
-    <field name="ipAddress">!^10\.0\.</field>
+    <field name="message" negate="yes">ipAddress=10\.0\.</field>
     <description>Keycloak: Login desde IP externa (no VPC)</description>
     <mitre>
       <id>T1078</id>

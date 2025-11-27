@@ -60,7 +60,7 @@ Protección automática contra:
 
 El script `terraform/user-data/waf-init.sh` instala automáticamente:
 - Kong Gateway + PostgreSQL
-- Nginx compilado con ModSecurity 3
+- Nginx compilado con ModSecurity v3
 - OWASP CRS v3.3.5
 - 6 reglas WAF custom
 - Wazuh agent con logs integration

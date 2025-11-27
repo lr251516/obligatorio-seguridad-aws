@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏭 Fósil Energías Renovables
+# Fósil Energías Renovables
 ## Infraestructura de Seguridad Empresarial en AWS
 
 [![Infraestructura](https://img.shields.io/badge/IaC-Terraform-623CE4?style=for-the-badge&logo=terraform)]()

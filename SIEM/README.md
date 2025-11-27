@@ -21,7 +21,7 @@ Wazuh SIEM con 17 reglas personalizadas implementando 4 casos de uso de detecciÃ
 
 ## ðŸ“Š Infraestructura Monitoreada
 
-### 4 Agentes Wazuh Conectados
+### 5 Agentes Wazuh Conectados
 
 | Agente | Hostname | IP Privada | Monitoreo |
 |--------|----------|------------|-----------|
@@ -29,6 +29,7 @@ Wazuh SIEM con 17 reglas personalizadas implementando 4 casos de uso de detecciÃ
 | **002** | waf-kong | 10.0.1.10 | Nginx + Kong + ModSecurity logs |
 | **003** | vpn-iam | 10.0.1.30 | Keycloak + SSH + VPN logs |
 | **004** | hardening-vm | 10.0.1.40 | FIM + SSH + CIS SCA |
+| **005** | grafana | 10.0.1.50 | Grafana + SSH logs |
 
 **Verificar agentes:**
 ```bash
