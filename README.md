@@ -287,10 +287,10 @@ Costo estimado si se deja corriendo: ~$50-70/mes (principalmente instancias m7i-
 - GitHub: [@lr251516](https://github.com/lr251516)
 - Email: lucasro01@gmail.com
 
-**Proyecto Académico**
-Universidad ORT Uruguay
-Analista en Infraestructura Informática
-Seguridad en Redes y Datos - Grupo N6A
+**Proyecto Académico** \
+Universidad ORT Uruguay \
+Analista en Infraestructura Informática \
+Seguridad en Redes y Datos - Grupo N6A   
 2025
 
 ---
@@ -300,11 +300,3 @@ Seguridad en Redes y Datos - Grupo N6A
 Este proyecto es de uso académico. Todo el código se proporciona tal cual para fines educativos.
 
 ---
-
-<div align="center">
-
-**⚠️ Aviso de Seguridad**
-
-Esta infraestructura utiliza HTTP para demostración académica. **Deployments en producción DEBEN usar HTTPS/TLS** para todos los servicios.
-
-</div>
