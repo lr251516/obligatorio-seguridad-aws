@@ -72,23 +72,15 @@ systemctl start wazuh-agent
 echo "[$(date)] Instalando Grafana..." >> /tmp/user-data.log
 
 # Variables para OAuth2
-# Obtener IP pública de la instancia VPN (10.0.1.30) usando AWS CLI
-VPN_PUBLIC_IP=$(aws ec2 describe-instances \
-  --region us-west-2 \
-  --filters "Name=private-ip-address,Values=10.0.1.30" "Name=instance-state-name,Values=running" \
-  --query 'Reservations[0].Instances[0].PublicIpAddress' \
-  --output text 2>/dev/null)
+# IP pública de la instancia VPN inyectada por Terraform
+VPN_PUBLIC_IP="${vpn_public_ip}"
+echo "[INFO] IP pública de VPN configurada: $${VPN_PUBLIC_IP}" >> /tmp/user-data.log
 
-# Fallback a IP privada si no se puede obtener la pública
-if [ -z "$VPN_PUBLIC_IP" ] || [ "$VPN_PUBLIC_IP" = "None" ]; then
-  VPN_PUBLIC_IP="10.0.1.30"
-  echo "[WARN] No se pudo obtener IP pública de VPN, usando IP privada" >> /tmp/user-data.log
-fi
+# Obtener IP pública de esta instancia (Grafana) desde metadata service
+GRAFANA_PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 || echo "10.0.1.50")
+echo "[INFO] IP pública de Grafana: $GRAFANA_PUBLIC_IP" >> /tmp/user-data.log
 
-# Obtener IP pública de esta instancia (Grafana)
-GRAFANA_PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
-
-KEYCLOAK_SERVER="http://${VPN_PUBLIC_IP}:8080"
+KEYCLOAK_SERVER="http://$${VPN_PUBLIC_IP}:8080"
 KEYCLOAK_REALM="fosil"
 GRAFANA_CLIENT_ID="grafana-oauth"
 GRAFANA_CLIENT_SECRET="grafana-secret-2024"
@@ -106,8 +98,8 @@ apt-get install -y grafana
 cat > /etc/grafana/grafana.ini <<EOF
 [server]
 http_port = 3000
-domain = ${GRAFANA_PUBLIC_IP}
-root_url = http://${GRAFANA_PUBLIC_IP}:3000
+domain = $${GRAFANA_PUBLIC_IP}
+root_url = http://$${GRAFANA_PUBLIC_IP}:3000
 
 [auth]
 # Permitir login local (admin) además de OAuth
@@ -117,15 +109,15 @@ disable_login_form = false
 enabled = true
 name = Keycloak
 allow_sign_up = true
-client_id = ${GRAFANA_CLIENT_ID}
-client_secret = ${GRAFANA_CLIENT_SECRET}
+client_id = $${GRAFANA_CLIENT_ID}
+client_secret = $${GRAFANA_CLIENT_SECRET}
 scopes = openid email profile offline_access roles
 email_attribute_path = email
 login_attribute_path = username
 name_attribute_path = full_name
-auth_url = ${KEYCLOAK_SERVER}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/auth
-token_url = ${KEYCLOAK_SERVER}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token
-api_url = ${KEYCLOAK_SERVER}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/userinfo
+auth_url = $${KEYCLOAK_SERVER}/realms/$${KEYCLOAK_REALM}/protocol/openid-connect/auth
+token_url = $${KEYCLOAK_SERVER}/realms/$${KEYCLOAK_REALM}/protocol/openid-connect/token
+api_url = $${KEYCLOAK_SERVER}/realms/$${KEYCLOAK_REALM}/protocol/openid-connect/userinfo
 role_attribute_path = contains(roles[*], 'infraestructura-admin') && 'Admin' || contains(roles[*], 'devops') && 'Editor' || 'Viewer'
 use_refresh_token = true
 
@@ -164,6 +156,49 @@ else
   echo "[$(date)] Grafana está listo!" >> /tmp/user-data.log
 fi
 
+# Actualizar redirect_uri en Keycloak con la IP pública de Grafana
+echo "[$(date)] Actualizando redirect_uri en Keycloak..." >> /tmp/user-data.log
+command -v jq >/dev/null || apt-get install -y jq
+
+# Verificar que Keycloak responde en la raíz
+for i in {1..24}; do
+  curl -s -f "http://$${VPN_PUBLIC_IP}:8080/" >/dev/null 2>&1 && break
+  sleep 5
+done
+
+# Obtener IP pública definitiva (esperar un poco más para asegurar que EIP esté asociada)
+sleep 10
+GRAFANA_PUBLIC_IP_FINAL=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 || echo "$GRAFANA_PUBLIC_IP")
+if [ "$GRAFANA_PUBLIC_IP_FINAL" != "$GRAFANA_PUBLIC_IP" ]; then
+  echo "[$(date)] IP pública cambió de $${GRAFANA_PUBLIC_IP} a $${GRAFANA_PUBLIC_IP_FINAL}, actualizando Grafana..." >> /tmp/user-data.log
+  # Actualizar configuración de Grafana si la IP cambió
+  sed -i "s|domain = .*|domain = $${GRAFANA_PUBLIC_IP_FINAL}|" /etc/grafana/grafana.ini
+  sed -i "s|root_url = .*|root_url = http://$${GRAFANA_PUBLIC_IP_FINAL}:3000|" /etc/grafana/grafana.ini
+  systemctl restart grafana-server
+  sleep 5
+fi
+
+# Actualizar Keycloak con la IP definitiva
+GRAFANA_URI="http://$${GRAFANA_PUBLIC_IP_FINAL}:3000/*"
+TOKEN=$(curl -s -X POST "http://$${VPN_PUBLIC_IP}:8080/realms/master/protocol/openid-connect/token" \
+  -d "username=admin&password=admin&grant_type=password&client_id=admin-cli" | jq -r '.access_token // empty')
+
+if [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ]; then
+  CLIENT_UUID=$(curl -s "http://$${VPN_PUBLIC_IP}:8080/admin/realms/fosil/clients?clientId=grafana-oauth" \
+    -H "Authorization: Bearer $${TOKEN}" | jq -r '.[0].id // empty')
+  
+  if [ -n "$CLIENT_UUID" ] && [ "$CLIENT_UUID" != "null" ]; then
+    CONFIG=$(curl -s "http://$${VPN_PUBLIC_IP}:8080/admin/realms/fosil/clients/$${CLIENT_UUID}" \
+      -H "Authorization: Bearer $${TOKEN}")
+    URIS=$(echo "$${CONFIG}" | jq --arg uri "$${GRAFANA_URI}" '.redirectUris + [$uri] | unique')
+    curl -s -X PUT "http://$${VPN_PUBLIC_IP}:8080/admin/realms/fosil/clients/$${CLIENT_UUID}" \
+      -H "Authorization: Bearer $${TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d "$(echo "$${CONFIG}" | jq --argjson uris "$${URIS}" '.redirectUris = $uris')" >/dev/null
+    echo "[$(date)] ✅ Keycloak actualizado" >> /tmp/user-data.log
+  fi
+fi
+
 # Resumen final
 echo "Grafana init completed with Wazuh agent + OAuth2 Keycloak" > /tmp/user-data-completed.log
 echo "" >> /tmp/user-data-completed.log
@@ -178,7 +213,7 @@ echo "" >> /tmp/user-data-completed.log
 echo "  2. Login local (admin/admin)" >> /tmp/user-data-completed.log
 echo "" >> /tmp/user-data-completed.log
 echo "Keycloak OAuth2 configurado:" >> /tmp/user-data-completed.log
-echo "  - Server: ${KEYCLOAK_SERVER}" >> /tmp/user-data-completed.log
+echo "  - Server: $${KEYCLOAK_SERVER}" >> /tmp/user-data-completed.log
 echo "  - Realm: fosil" >> /tmp/user-data-completed.log
 echo "  - Client ID: grafana-oauth" >> /tmp/user-data-completed.log
 echo "" >> /tmp/user-data-completed.log

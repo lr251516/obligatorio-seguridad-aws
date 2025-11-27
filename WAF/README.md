@@ -48,6 +48,8 @@ Protección automática contra:
 | **900006** | Credenciales en URL (`password=`, `token=`, `api_key=`) | DENY 403 | ✅ Testeado |
 | **900007** | Scanner user-agents (`sqlmap`, `nikto`, `nmap`, `masscan`) | DENY 403 | ✅ Testeado |
 
+**Nota sobre Rate Limiting:** El rate limiting se maneja exclusivamente por Kong Gateway (20 req/min en `/api/telemetria`), no por ModSecurity. Esto evita conflictos y asegura respuestas consistentes.
+
 **Ubicación:** `/opt/coreruleset/rules/REQUEST-900-CUSTOM-RULES.conf`
 
 ---
@@ -90,6 +92,11 @@ sudo ./configure-kong-services.sh
 
 ## 🧪 Testing OWASP Top 10
 
+**Importante:** Para ver solo los códigos de estado HTTP en los tests, usa:
+- `curl -s -o /dev/null -w "%{http_code}\n"` para ver solo el código (ej: `403`)
+- `curl -i` para ver headers y código de estado completo
+- `curl` sin opciones mostrará el body completo de la respuesta (puede ser HTML/JSON de httpbin)
+
 Todos los tests desde máquina externa (internet):
 
 ```bash
@@ -99,60 +106,74 @@ export WAF_IP=$(terraform output -raw waf_public_ip)
 ### Test 1: SQL Injection ✅
 
 ```bash
-# OWASP CRS + Regla custom 900004
-curl "http://$WAF_IP/?id=1' OR '1'='1"
+# OWASP CRS + Regla custom 900004 (usar URL encoding)
+curl -s -o /dev/null -w "%{http_code}\n" 'http://'"$WAF_IP"'/?id=1%27%20OR%20%271%27=%271'
+# O ver respuesta completa:
+curl -i 'http://'"$WAF_IP"'/?id=1%27%20OR%20%271%27=%271'
 ```
 
 **Esperado:** `403 Forbidden`
 **Wazuh:** Rule 31333 (ModSecurity) + Rule 100010 (custom)
 
+**Nota:** `%27` = `'`, `%20` = espacio (URL encoding para evitar errores de curl)
+
 ### Test 2: Cross-Site Scripting (XSS) ✅
 
 ```bash
 # OWASP CRS + Regla custom 900003
-curl "http://$WAF_IP/?search=<script>alert(1)</script>"
+curl -s -o /dev/null -w "%{http_code}\n" "http://$WAF_IP/?search=<script>alert(1)</script>"
+# O ver respuesta completa:
+curl -i "http://$WAF_IP/?search=<script>alert(1)</script>"
 ```
 
-**Esperado:** `403 Forbidden`
+**Esperado:** `403` (solo código HTTP) o `403 Forbidden` (con headers)
 **Wazuh:** Rule 31333 + Rule 100011
 
 ### Test 3: Path Traversal ✅
 
 ```bash
 # Regla custom 900002
-curl "http://$WAF_IP/?file=../../etc/passwd"
+curl -s -o /dev/null -w "%{http_code}\n" "http://$WAF_IP/?file=../../etc/passwd"
+# O ver respuesta completa:
+curl -i "http://$WAF_IP/?file=../../etc/passwd"
 ```
 
-**Esperado:** `403 Forbidden`
+**Esperado:** `403` (solo código HTTP) o `403 Forbidden` (con headers)
 **Wazuh:** Rule 31333 + Rule 100013
 
 ### Test 4: Credenciales en URL ✅
 
 ```bash
 # Regla custom 900006
-curl "http://$WAF_IP/?password=123456&token=abc"
+curl -s -o /dev/null -w "%{http_code}\n" "http://$WAF_IP/?password=123456&token=abc"
+# O ver respuesta completa:
+curl -i "http://$WAF_IP/?password=123456&token=abc"
 ```
 
-**Esperado:** `403 Forbidden`
+**Esperado:** `403` (solo código HTTP) o `403 Forbidden` (con headers)
 
 ### Test 5: Scanner Detection ✅
 
 ```bash
 # Regla custom 900007
-curl -A "nikto/2.1.6" http://$WAF_IP/
-curl -A "sqlmap/1.0" http://$WAF_IP/
+curl -s -o /dev/null -w "%{http_code}\n" -A "nikto/2.1.6" http://$WAF_IP/
+curl -s -o /dev/null -w "%{http_code}\n" -A "sqlmap/1.0" http://$WAF_IP/
+# O ver respuesta completa:
+curl -i -A "nikto/2.1.6" http://$WAF_IP/
 ```
 
-**Esperado:** `403 Forbidden` (ambos)
+**Esperado:** `403` (solo código HTTP) o `403 Forbidden` (con headers) para ambos
 
 ### Test 6: Admin Panel Restriction ✅
 
 ```bash
 # Regla custom 900001 - Solo red interna
-curl http://$WAF_IP/admin
+curl -s -o /dev/null -w "%{http_code}\n" http://$WAF_IP/admin
+# O ver respuesta completa:
+curl -i http://$WAF_IP/admin
 ```
 
-**Esperado:** `403 Forbidden` (desde IP externa)
+**Esperado:** `403` (solo código HTTP) o `403 Forbidden` (con headers) desde IP externa
 **Permitido:** Solo desde 10.0.1.0/24
 
 ### Test 7: Kong Rate Limiting
@@ -160,11 +181,14 @@ curl http://$WAF_IP/admin
 ```bash
 # 25 requests a /api/telemetria (límite: 20/min)
 for i in {1..25}; do
-    curl -s http://$WAF_IP/api/telemetria
+    echo -n "Request $i: "
+    curl -s -o /dev/null -w "%{http_code}\n" http://$WAF_IP/api/telemetria
 done
 ```
 
-**Esperado:** Primeros 20 = 200 OK, siguientes = 429 Too Many Requests
+**Esperado:** Primeros 20 = `200`, siguientes = `429 Too Many Requests`
+
+**Nota:** Si ves el contenido completo de httpbin en vez de solo códigos HTTP, usa `-s -o /dev/null -w "%{http_code}\n"` para ver solo el código de estado.
 
 ---
 

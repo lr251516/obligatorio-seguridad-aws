@@ -54,9 +54,10 @@ echo "   ✅ Rutas creadas: /api/telemetria, /api/energia"
 curl -s -X POST "$KONG_ADMIN/services/telemetria-api/plugins" \
     -d "name=rate-limiting" \
     -d "config.minute=20" \
-    -d "config.policy=local" > /dev/null
+    -d "config.policy=local" \
+    -d "config.limit_by=ip" > /dev/null
 
-echo "   ✅ Rate limiting: 20 req/min"
+echo "   ✅ Rate limiting: 20 req/min (por IP)"
 echo ""
 
 # ============================================

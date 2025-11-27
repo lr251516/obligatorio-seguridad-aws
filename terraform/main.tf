@@ -565,6 +565,15 @@ resource "aws_instance" "hardening" {
   }
 }
 
+# Elastic IP - Grafana (crear sin asociar para evitar ciclo)
+resource "aws_eip" "grafana" {
+  domain = "vpc"
+
+  tags = {
+    Name = "fosil-grafana-eip"
+  }
+}
+
 # VM Grafana (10.0.1.50)
 resource "aws_instance" "grafana" {
   ami           = data.aws_ami.ubuntu.id
@@ -581,7 +590,11 @@ resource "aws_instance" "grafana" {
     volume_type = "gp3"
   }
 
-  user_data = file("${path.module}/user-data/grafana-init.sh")
+  user_data = templatefile("${path.module}/user-data/grafana-init.sh", {
+    vpn_public_ip = try(aws_eip.vpn.public_ip, "10.0.1.30")
+  })
+
+  depends_on = [aws_eip.vpn]
 
   tags = {
     Name = "fosil-grafana"
@@ -589,25 +602,20 @@ resource "aws_instance" "grafana" {
   }
 }
 
-# Elastic IP - Grafana
-resource "aws_eip" "grafana" {
-  instance = aws_instance.grafana.id
-  domain   = "vpc"
-
-  tags = {
-    Name = "fosil-grafana-eip"
-  }
+# Asociar EIP a la instancia Grafana
+resource "aws_eip_association" "grafana" {
+  instance_id   = aws_instance.grafana.id
+  allocation_id = aws_eip.grafana.id
 }
 
-# Elastic IP - Hardening (para testing/configuración inicial)
-resource "aws_eip" "hardening" {
-  instance = aws_instance.hardening.id
-  domain   = "vpc"
-
-  tags = {
-    Name = "fosil-hardening-eip"
-  }
-}
+# Elastic IP - Hardening (comentado para ahorrar EIPs, usar IP pública automática)
+# resource "aws_eip" "hardening" {
+#   instance = aws_instance.hardening.id
+#   domain   = "vpc"
+#   tags = {
+#     Name = "fosil-hardening-eip"
+#   }
+# }
 
 # Elastic IP para Wazuh (dashboard accesible)
 resource "aws_eip" "wazuh" {

@@ -32,21 +32,21 @@ Infraestructura de seguridad para **Fósil Energías Renovables S.A.** desplegad
 │                          us-west-2 (Oregon)                         │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  ┌──────────────────┐         ┌──────────────────┐                 │
-│  │  Wazuh SIEM      │◀────────│  WAF/Kong        │◀───── Internet  │
-│  │  10.0.1.20       │  agent  │  10.0.1.10       │       (Port 80) │
-│  │  m7i-flex.large  │         │  ModSecurity     │                 │
-│  │  (8GB)           │         │  t3.micro        │                 │
-│  └────────┬─────────┘         └──────────────────┘                 │
+│  ┌──────────────────┐         ┌──────────────────┐                  │
+│  │  Wazuh SIEM      │◀────────│  WAF/Kong        │◀───── Internet   │
+│  │  10.0.1.20       │  agent  │  10.0.1.10       │       (Port 80)  │
+│  │  m7i-flex.large  │         │  ModSecurity     │                  │
+│  │  (8GB)           │         │  t3.micro        │                  │
+│  └────────┬─────────┘         └──────────────────┘                  │
 │           │ agents                                                  │
 │           ├───────────────────────────┐                             │
 │           ▼                           ▼                             │
-│  ┌──────────────────┐       ┌──────────────────┐                   │
-│  │  VPN/IAM         │       │  Grafana         │◀───── Internet    │
-│  │  10.0.1.30       │◀──────│  10.0.1.50       │    (Port 3000)    │
-│  │  Keycloak        │ OAuth2│  + Wazuh agent   │                   │
-│  │  WireGuard       │       │  t3.micro        │                   │
-│  │  c7i-flex (4GB)  │       └──────────────────┘                   │
+│  ┌──────────────────┐       ┌──────────────────┐                    │
+│  │  VPN/IAM         │       │  Grafana         │◀───── Internet     │
+│  │  10.0.1.30       │◀──────│  10.0.1.50       │    (Port 3000)     │
+│  │  Keycloak        │ OAuth2│  + Wazuh agent   │                    │
+│  │  WireGuard       │       │  t3.micro        │                    │
+│  │  c7i-flex (4GB)  │       └──────────────────┘                    │
 │  └──────────────────┘                                               │
 │           │                                                         │
 │           │ agent                                                   │

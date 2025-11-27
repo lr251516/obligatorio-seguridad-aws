@@ -27,7 +27,7 @@ output "hardening_private_ip" {
 }
 
 output "hardening_public_ip" {
-  value = aws_eip.hardening.public_ip
+  value = aws_instance.hardening.public_ip
 }
 
 output "grafana_public_ip" {
@@ -43,7 +43,7 @@ output "ssh_commands" {
     wazuh     = "ssh -i ~/.ssh/obligatorio-srd ubuntu@${aws_eip.wazuh.public_ip}"
     vpn       = "ssh -i ~/.ssh/obligatorio-srd ubuntu@${aws_eip.vpn.public_ip}"
     waf       = "ssh -i ~/.ssh/obligatorio-srd ubuntu@${aws_eip.waf.public_ip}"
-    hardening = "ssh -i ~/.ssh/obligatorio-srd ubuntu@${aws_eip.hardening.public_ip}"
+    hardening = "ssh -i ~/.ssh/obligatorio-srd ubuntu@${aws_instance.hardening.public_ip}"
     grafana   = "ssh -i ~/.ssh/obligatorio-srd ubuntu@${aws_eip.grafana.public_ip}"
   }
 }
@@ -58,13 +58,13 @@ output "infrastructure_summary" {
   WAF/Kong:     ${aws_eip.waf.public_ip}    (10.0.1.10 - t3.micro)
   Wazuh SIEM:   ${aws_eip.wazuh.public_ip}  (10.0.1.20 - m7i-flex.large 8GB)
   VPN/IAM:      ${aws_eip.vpn.public_ip}    (10.0.1.30 - c7i-flex.large 4GB)
-  Hardening:    ${aws_eip.hardening.public_ip}    (10.0.1.40 - t3.micro)
+  Hardening:    ${aws_instance.hardening.public_ip}    (10.0.1.40 - t3.micro)
   Grafana:      ${aws_eip.grafana.public_ip}    (10.0.1.50 - t3.micro)
 
   URLs:
     - Wazuh:    https://${aws_eip.wazuh.public_ip}
     - Keycloak: http://${aws_eip.vpn.public_ip}:8080
-    - Kong:     http://${aws_eip.waf.public_ip}:8000
+    - Kong:     http://${aws_eip.waf.public_ip}:8002
     - Grafana:  http://${aws_eip.grafana.public_ip}:3000
 
   ================================================
