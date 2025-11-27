@@ -16,7 +16,7 @@
 
 ---
 
-## ✨ Aspectos Destacados
+## Aspectos Destacados
 
 - 🚀 **Deployment 100% Automatizado** - Un único `terraform apply` despliega toda la infraestructura (10-12 min)
 - 🛡️ **Defensa en Profundidad** - 5 capas de seguridad: WAF → SIEM → IAM → VPN → Hardening
