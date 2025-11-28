@@ -8,10 +8,10 @@ Wazuh SIEM con 17 reglas personalizadas implementando 4 casos de uso de detecci�
 
 | Componente | Versión | Propósito |
 |------------|---------|-----------|
-| **Wazuh Manager** | 4.13.0 | SIEM central, procesamiento reglas |
-| **Wazuh Indexer** | 4.13.0 | OpenSearch para almacenamiento logs |
-| **Wazuh Dashboard** | 4.13.0 | UI web análisis y visualización |
-| **Wazuh Agents** | 4.13.0 | 5 agentes monitoreando VMs |
+| **Wazuh Manager** | 4.13.1 | SIEM central, procesamiento reglas |
+| **Wazuh Indexer** | 4.13.1 | OpenSearch para almacenamiento logs |
+| **Wazuh Dashboard** | 4.13.1 | UI web análisis y visualización |
+| **Wazuh Agents** | 4.13.1 | 5 agentes monitoreando VMs |
 
 **Estado:** ✅ 100% funcional - 4 casos de uso testeados
 
