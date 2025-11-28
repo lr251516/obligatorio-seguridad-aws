@@ -11,7 +11,7 @@ Wazuh SIEM con 17 reglas personalizadas implementando 4 casos de uso de detecci�
 | **Wazuh Manager** | 4.13.1 | SIEM central, procesamiento reglas |
 | **Wazuh Indexer** | 4.13.1 | OpenSearch para almacenamiento logs |
 | **Wazuh Dashboard** | 4.13.1 | UI web análisis y visualización |
-| **Wazuh Agents** | 4.13.1 | 5 agentes monitoreando VMs |
+| **Wazuh Agents** | 4.13.1 | 4 agentes monitoreando VMs |
 
 **Estado:** ✅ 100% funcional - 4 casos de uso testeados
 
@@ -21,15 +21,16 @@ Wazuh SIEM con 17 reglas personalizadas implementando 4 casos de uso de detecci�
 
 ## 📊 Infraestructura Monitoreada
 
-### 5 Agentes Wazuh Conectados
+### 4 Agentes Wazuh Conectados
 
 | Agente | Hostname | IP Privada | Monitoreo |
 |--------|----------|------------|-----------|
-| **001** | wazuh-siem | 10.0.1.20 | SIEM self-monitoring |
-| **002** | waf-kong | 10.0.1.10 | Nginx + Kong + ModSecurity logs |
-| **003** | vpn-iam | 10.0.1.30 | Keycloak + SSH + VPN logs |
-| **004** | hardening-vm | 10.0.1.40 | FIM + SSH + CIS SCA |
-| **005** | grafana | 10.0.1.50 | Grafana + SSH logs |
+| **001** | waf-kong | 10.0.1.10 | Nginx + Kong + ModSecurity logs |
+| **002** | vpn-iam | 10.0.1.30 | Keycloak + SSH + VPN logs |
+| **003** | hardening-vm | 10.0.1.40 | FIM + SSH + CIS SCA |
+| **004** | grafana | 10.0.1.50 | Grafana + SSH logs |
+
+**Nota:** El servidor Wazuh (10.0.1.20) es el manager central, no aparece como agente.
 
 **Verificar agentes:**
 ```bash
@@ -37,7 +38,7 @@ ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw wazuh_public_ip)
 sudo /var/ossec/bin/agent_control -l
 ```
 
-**Esperado:** 5 agentes en estado `Active` (wazuh-siem, waf-kong, vpn-iam, hardening-vm, grafana)
+**Esperado:** 4 agentes en estado `Active` (waf-kong, vpn-iam, hardening-vm, grafana)
 
 ---
 
@@ -46,7 +47,7 @@ sudo /var/ossec/bin/agent_control -l
 ```
 URL: https://<WAZUH_PUBLIC_IP>
 Usuario: admin
-Password: (ejecutar en VM: sudo cat /root/wazuh-passwords.txt | grep admin)
+Password: (ejecutar en VM: sudo cat /root/wazuh-passwords.txt)
 ```
 
 **Primer acceso:** Navegar a **Security events** para ver alertas en tiempo real.
