@@ -11,7 +11,7 @@ systemctl enable systemd-timesyncd
 systemctl restart systemd-timesyncd
 
 # System setup
-apt-get update && apt-get upgrade -y
+apt-get update && # Nota: apt-get upgrade removido porque puede fallar por paquetes 404 en repos
 apt-get install -y git curl wget apt-transport-https lsb-release gnupg2 build-essential libpcre3-dev zlib1g-dev libssl-dev libgeoip-dev libgd-dev libxml2-dev libyajl-dev automake libtool pkg-config postgresql postgresql-contrib libmodsecurity3 libmodsecurity-dev
 hostnamectl set-hostname waf-kong
 mkdir -p /opt/fosil/scripts

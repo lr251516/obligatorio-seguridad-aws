@@ -11,9 +11,25 @@ REALM="fosil"
 
 # Modo automático (no interactivo) para user-data scripts
 AUTO_MODE=false
-if [ "$1" = "--auto" ]; then
-    AUTO_MODE=true
-fi
+GRAFANA_IP_ARG=""
+
+# Parsear argumentos
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --auto)
+      AUTO_MODE=true
+      shift
+      ;;
+    --grafana-ip)
+      GRAFANA_IP_ARG="$2"
+      shift 2
+      ;;
+    *)
+      echo "Uso: $0 [--auto] [--grafana-ip IP_PUBLICA]"
+      exit 1
+      ;;
+  esac
+done
 
 echo ""
 echo "  Keycloak Realm Setup - Fósil Energías Renovables        "
@@ -28,6 +44,16 @@ if ! curl -s "$SERVER" > /dev/null; then
 fi
 
 echo "[OK] Keycloak accesible en $SERVER"
+echo ""
+
+# Configurar redirect URIs de Grafana
+if [ -n "$GRAFANA_IP_ARG" ] && [ "$GRAFANA_IP_ARG" != "None" ]; then
+    echo "[INFO] Configurando Grafana OAuth con IP pública: $GRAFANA_IP_ARG"
+    GRAFANA_REDIRECT_URIS='["http://*:3000/*","http://10.0.1.50:3000/*","http://'"$GRAFANA_IP_ARG"':3000/*"]'
+else
+    echo "[INFO] Configurando Grafana OAuth con IPs locales solamente"
+    GRAFANA_REDIRECT_URIS='["http://*:3000/*","http://10.0.1.50:3000/*"]'
+fi
 echo ""
 
 # Autenticar
@@ -212,7 +238,7 @@ sudo -u keycloak $KC_CLI create clients -r $REALM \
     -s secret=grafana-secret-2024 \
     -s publicClient=false \
     -s protocol=openid-connect \
-    -s 'redirectUris=["http://*:3000/*","http://10.0.1.50:3000/*"]' \
+    -s "redirectUris=$GRAFANA_REDIRECT_URIS" \
     -s 'webOrigins=["*"]' \
     -s standardFlowEnabled=true \
     -s directAccessGrantsEnabled=true \

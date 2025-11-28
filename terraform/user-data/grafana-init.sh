@@ -5,7 +5,7 @@ set -e
 timedatectl set-timezone America/Montevideo
 
 apt-get update
-apt-get upgrade -y
+# Nota: apt-get upgrade removido porque puede fallar por paquetes 404 en repos
 apt-get install -y git curl systemd-timesyncd apt-transport-https software-properties-common wget gnupg
 
 # Configurar NTP
@@ -95,6 +95,12 @@ apt-get update
 apt-get install -y grafana
 
 # Configurar Grafana con OAuth2
+# IMPORTANTE:
+# - auth_url usa IP PÚBLICA (navegador del usuario se redirige directamente a Keycloak)
+# - token_url/api_url usan IP PRIVADA (comunicación servidor Grafana <-> Keycloak dentro VPC)
+#   Esto evita "HTTPS required" error porque Keycloak rechaza HTTP desde IPs públicas
+KEYCLOAK_PRIVATE_IP="10.0.1.30"
+
 cat > /etc/grafana/grafana.ini <<EOF
 [server]
 http_port = 3000
@@ -116,8 +122,8 @@ email_attribute_path = email
 login_attribute_path = username
 name_attribute_path = full_name
 auth_url = $${KEYCLOAK_SERVER}/realms/$${KEYCLOAK_REALM}/protocol/openid-connect/auth
-token_url = $${KEYCLOAK_SERVER}/realms/$${KEYCLOAK_REALM}/protocol/openid-connect/token
-api_url = $${KEYCLOAK_SERVER}/realms/$${KEYCLOAK_REALM}/protocol/openid-connect/userinfo
+token_url = http://$${KEYCLOAK_PRIVATE_IP}:8080/realms/$${KEYCLOAK_REALM}/protocol/openid-connect/token
+api_url = http://$${KEYCLOAK_PRIVATE_IP}:8080/realms/$${KEYCLOAK_REALM}/protocol/openid-connect/userinfo
 role_attribute_path = contains(roles[*], 'infraestructura-admin') && 'Admin' || contains(roles[*], 'devops') && 'Editor' || 'Viewer'
 use_refresh_token = true
 
@@ -157,21 +163,34 @@ else
 fi
 
 # Actualizar redirect_uri en Keycloak con la IP pública de Grafana
-echo "[$(date)] Actualizando redirect_uri en Keycloak..." >> /tmp/user-data.log
+echo "[$(date)] === Actualizando redirect_uri en Keycloak ===" >> /tmp/user-data.log
 command -v jq >/dev/null || apt-get install -y jq
 
-# Verificar que Keycloak responde en la raíz
-for i in {1..24}; do
-  curl -s -f "http://$${VPN_PUBLIC_IP}:8080/" >/dev/null 2>&1 && break
+# Verificar que Keycloak responde en la raíz (usar IP privada)
+echo "[$(date)] Esperando que Keycloak esté disponible en http://$${KEYCLOAK_PRIVATE_IP}:8080..." >> /tmp/user-data.log
+KEYCLOAK_READY=false
+for i in {1..30}; do
+  if curl -s -f "http://$${KEYCLOAK_PRIVATE_IP}:8080/" >/dev/null 2>&1; then
+    echo "[$(date)] ✅ Keycloak respondió correctamente (intento $i)" >> /tmp/user-data.log
+    KEYCLOAK_READY=true
+    break
+  fi
+  echo "[$(date)] Keycloak no responde aún, esperando... (intento $i/30)" >> /tmp/user-data.log
   sleep 5
 done
+
+if [ "$KEYCLOAK_READY" = false ]; then
+  echo "[$(date)] ❌ ERROR: Keycloak no respondió después de 150 segundos" >> /tmp/user-data.log
+  exit 1
+fi
 
 # Obtener IP pública definitiva (esperar un poco más para asegurar que EIP esté asociada)
 sleep 10
 GRAFANA_PUBLIC_IP_FINAL=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 || echo "$GRAFANA_PUBLIC_IP")
+echo "[$(date)] IP pública final de Grafana: $${GRAFANA_PUBLIC_IP_FINAL}" >> /tmp/user-data.log
+
 if [ "$GRAFANA_PUBLIC_IP_FINAL" != "$GRAFANA_PUBLIC_IP" ]; then
   echo "[$(date)] IP pública cambió de $${GRAFANA_PUBLIC_IP} a $${GRAFANA_PUBLIC_IP_FINAL}, actualizando Grafana..." >> /tmp/user-data.log
-  # Actualizar configuración de Grafana si la IP cambió
   sed -i "s|domain = .*|domain = $${GRAFANA_PUBLIC_IP_FINAL}|" /etc/grafana/grafana.ini
   sed -i "s|root_url = .*|root_url = http://$${GRAFANA_PUBLIC_IP_FINAL}:3000|" /etc/grafana/grafana.ini
   systemctl restart grafana-server
@@ -180,24 +199,99 @@ fi
 
 # Actualizar Keycloak con la IP definitiva
 GRAFANA_URI="http://$${GRAFANA_PUBLIC_IP_FINAL}:3000/*"
-TOKEN=$(curl -s -X POST "http://$${VPN_PUBLIC_IP}:8080/realms/master/protocol/openid-connect/token" \
-  -d "username=admin&password=admin&grant_type=password&client_id=admin-cli" | jq -r '.access_token // empty')
 
-if [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ]; then
-  CLIENT_UUID=$(curl -s "http://$${VPN_PUBLIC_IP}:8080/admin/realms/fosil/clients?clientId=grafana-oauth" \
-    -H "Authorization: Bearer $${TOKEN}" | jq -r '.[0].id // empty')
-  
-  if [ -n "$CLIENT_UUID" ] && [ "$CLIENT_UUID" != "null" ]; then
-    CONFIG=$(curl -s "http://$${VPN_PUBLIC_IP}:8080/admin/realms/fosil/clients/$${CLIENT_UUID}" \
-      -H "Authorization: Bearer $${TOKEN}")
-    URIS=$(echo "$${CONFIG}" | jq --arg uri "$${GRAFANA_URI}" '.redirectUris + [$uri] | unique')
-    curl -s -X PUT "http://$${VPN_PUBLIC_IP}:8080/admin/realms/fosil/clients/$${CLIENT_UUID}" \
+# RETRY LOOP: Esperar hasta que el realm 'fosil' exista (creado por vpn-init.sh)
+echo "[$(date)] Esperando que realm 'fosil' sea creado en Keycloak..." >> /tmp/user-data.log
+REALM_READY=false
+for retry in {1..60}; do
+  TOKEN_RESPONSE=$(curl -s -m 10 -X POST "http://$${KEYCLOAK_PRIVATE_IP}:8080/realms/master/protocol/openid-connect/token" \
+    -d "username=admin&password=admin&grant_type=password&client_id=admin-cli" 2>&1)
+  TOKEN=$(echo "$${TOKEN_RESPONSE}" | jq -r '.access_token // empty' 2>/dev/null)
+
+  if [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ]; then
+    # Token OK, verificar si realm fosil existe
+    REALM_CHECK=$(curl -s -m 10 "http://$${KEYCLOAK_PRIVATE_IP}:8080/admin/realms/fosil/clients?clientId=grafana-oauth" \
+      -H "Authorization: Bearer $${TOKEN}" 2>&1)
+
+    if echo "$${REALM_CHECK}" | grep -q '"clientId":"grafana-oauth"'; then
+      echo "[$(date)] ✅ Realm 'fosil' y cliente 'grafana-oauth' encontrados (intento $retry)" >> /tmp/user-data.log
+      REALM_READY=true
+      break
+    elif echo "$${REALM_CHECK}" | grep -q "Realm not found"; then
+      echo "[$(date)] Realm 'fosil' aún no existe, esperando... (intento $retry/60)" >> /tmp/user-data.log
+    else
+      echo "[$(date)] Respuesta inesperada: $${REALM_CHECK:0:100}" >> /tmp/user-data.log
+    fi
+  else
+    echo "[$(date)] No se pudo obtener token, reintentando... (intento $retry/60)" >> /tmp/user-data.log
+  fi
+
+  sleep 5
+done
+
+if [ "$REALM_READY" = false ]; then
+  echo "[$(date)] ❌ ERROR: Realm 'fosil' no fue creado después de 300 segundos (5 min)" >> /tmp/user-data.log
+  echo "[$(date)] Saltando actualización de redirectUris - configurar manualmente" >> /tmp/user-data.log
+else
+  # Realm existe, proceder con actualización
+  echo "[$(date)] Obteniendo token de Keycloak (usando IP privada $${KEYCLOAK_PRIVATE_IP})..." >> /tmp/user-data.log
+  TOKEN_RESPONSE=$(curl -s -m 10 -X POST "http://$${KEYCLOAK_PRIVATE_IP}:8080/realms/master/protocol/openid-connect/token" \
+    -d "username=admin&password=admin&grant_type=password&client_id=admin-cli" 2>&1)
+  TOKEN=$(echo "$${TOKEN_RESPONSE}" | jq -r '.access_token // empty' 2>/dev/null)
+
+  echo "[$(date)] ✅ Token obtenido correctamente" >> /tmp/user-data.log
+
+  # Buscar cliente grafana-oauth
+  echo "[$(date)] Buscando cliente grafana-oauth en realm fosil..." >> /tmp/user-data.log
+  CLIENT_RESPONSE=$(curl -s -m 10 "http://$${KEYCLOAK_PRIVATE_IP}:8080/admin/realms/fosil/clients?clientId=grafana-oauth" \
+    -H "Authorization: Bearer $${TOKEN}" 2>&1)
+  echo "[$(date)] Respuesta de búsqueda: $${CLIENT_RESPONSE:0:200}" >> /tmp/user-data.log
+  CLIENT_UUID=$(echo "$${CLIENT_RESPONSE}" | jq -r '.[0].id // empty' 2>/dev/null)
+
+  if [ -z "$CLIENT_UUID" ] || [ "$CLIENT_UUID" = "null" ]; then
+    echo "[$(date)] ❌ ERROR: No se encontró el cliente grafana-oauth" >> /tmp/user-data.log
+    echo "[$(date)] Clientes disponibles en realm fosil:" >> /tmp/user-data.log
+    curl -s -m 10 "http://$${KEYCLOAK_PRIVATE_IP}:8080/admin/realms/fosil/clients" \
+      -H "Authorization: Bearer $${TOKEN}" | jq -r '.[].clientId' >> /tmp/user-data.log 2>&1
+  else
+    echo "[$(date)] ✅ Cliente encontrado: UUID=$${CLIENT_UUID}" >> /tmp/user-data.log
+
+    # Obtener configuración actual
+    CONFIG=$(curl -s -m 10 "http://$${KEYCLOAK_PRIVATE_IP}:8080/admin/realms/fosil/clients/$${CLIENT_UUID}" \
+      -H "Authorization: Bearer $${TOKEN}" 2>&1)
+    echo "[$(date)] Config obtenida (primeros 200 chars): $${CONFIG:0:200}" >> /tmp/user-data.log
+
+    CURRENT_URIS=$(echo "$${CONFIG}" | jq -r '.redirectUris' 2>/dev/null)
+    echo "[$(date)] URIs actuales: $${CURRENT_URIS}" >> /tmp/user-data.log
+
+    # Agregar nueva URI
+    URIS=$(echo "$${CONFIG}" | jq --arg uri "$${GRAFANA_URI}" '.redirectUris + [$uri] | unique' 2>/dev/null)
+    echo "[$(date)] URIs nuevas (con $${GRAFANA_URI}): $${URIS}" >> /tmp/user-data.log
+
+    # Actualizar cliente
+    UPDATE_RESPONSE=$(curl -s -m 15 -w "\n%%{http_code}" -X PUT "http://$${KEYCLOAK_PRIVATE_IP}:8080/admin/realms/fosil/clients/$${CLIENT_UUID}" \
       -H "Authorization: Bearer $${TOKEN}" \
       -H "Content-Type: application/json" \
-      -d "$(echo "$${CONFIG}" | jq --argjson uris "$${URIS}" '.redirectUris = $uris')" >/dev/null
-    echo "[$(date)] ✅ Keycloak actualizado" >> /tmp/user-data.log
+      -d "$(echo "$${CONFIG}" | jq --argjson uris "$${URIS}" '.redirectUris = $uris')")
+
+    HTTP_CODE=$(echo "$${UPDATE_RESPONSE}" | tail -n1)
+    echo "[$(date)] HTTP response code: $${HTTP_CODE}" >> /tmp/user-data.log
+
+    if [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "200" ]; then
+      echo "[$(date)] ✅ Keycloak actualizado correctamente (HTTP $${HTTP_CODE})" >> /tmp/user-data.log
+
+      # Verificar actualización
+      VERIFY_URIS=$(curl -s -m 10 "http://$${KEYCLOAK_PRIVATE_IP}:8080/admin/realms/fosil/clients/$${CLIENT_UUID}" \
+        -H "Authorization: Bearer $${TOKEN}" | jq -r '.redirectUris' 2>/dev/null)
+      echo "[$(date)] URIs después de actualización: $${VERIFY_URIS}" >> /tmp/user-data.log
+    else
+      echo "[$(date)] ❌ ERROR: Actualización falló (HTTP $${HTTP_CODE})" >> /tmp/user-data.log
+      echo "$${UPDATE_RESPONSE}" >> /tmp/user-data.log
+    fi
   fi
 fi
+
+echo "[$(date)] === Fin actualización Keycloak ===" >> /tmp/user-data.log
 
 # Resumen final
 echo "Grafana init completed with Wazuh agent + OAuth2 Keycloak" > /tmp/user-data-completed.log

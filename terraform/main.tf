@@ -509,7 +509,9 @@ resource "aws_instance" "vpn" {
     volume_type = "gp3"
   }
 
-  user_data = file("${path.module}/user-data/vpn-init.sh")
+  user_data = templatefile("${path.module}/user-data/vpn-init.sh", {
+    grafana_public_ip = aws_eip.grafana.public_ip
+  })
 
   tags = {
     Name = "fosil-vpn-iam"

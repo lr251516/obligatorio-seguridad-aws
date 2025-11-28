@@ -5,7 +5,7 @@ set -e
 timedatectl set-timezone America/Montevideo
 
 apt-get update
-apt-get upgrade -y
+# Nota: apt-get upgrade removido porque puede fallar por paquetes 404 en repos
 apt-get install -y git curl wget htop systemd-timesyncd
 
 # Configurar NTP después de asegurar que está instalado

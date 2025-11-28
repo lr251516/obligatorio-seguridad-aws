@@ -10,7 +10,7 @@ timedatectl set-timezone America/Montevideo
 
 # Actualización de sistema base
 apt-get update
-apt-get upgrade -y
+# Nota: apt-get upgrade removido porque puede fallar por paquetes 404 en repos
 
 # Paquetes mínimos requeridos
 apt-get install -y git curl systemd-timesyncd

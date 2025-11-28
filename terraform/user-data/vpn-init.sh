@@ -5,7 +5,8 @@ set -e
 timedatectl set-timezone America/Montevideo
 
 apt-get update
-apt-get upgrade -y
+# Nota: apt-get upgrade removido porque puede fallar por paquetes 404 en repos
+# y no es crítico para deployment inicial
 apt-get install -y git curl wireguard wireguard-tools resolvconf openjdk-17-jre-headless systemd-timesyncd jq
 
 # Configurar NTP después de asegurar que está instalado
@@ -105,10 +106,10 @@ PSQL
 # Descargar Keycloak
 KEYCLOAK_VERSION="23.0.0"
 cd /opt
-wget -q https://github.com/keycloak/keycloak/releases/download/${KEYCLOAK_VERSION}/keycloak-${KEYCLOAK_VERSION}.tar.gz
-tar -xzf keycloak-${KEYCLOAK_VERSION}.tar.gz
-mv keycloak-${KEYCLOAK_VERSION} keycloak
-rm keycloak-${KEYCLOAK_VERSION}.tar.gz
+wget -q https://github.com/keycloak/keycloak/releases/download/$${KEYCLOAK_VERSION}/keycloak-$${KEYCLOAK_VERSION}.tar.gz
+tar -xzf keycloak-$${KEYCLOAK_VERSION}.tar.gz
+mv keycloak-$${KEYCLOAK_VERSION} keycloak
+rm keycloak-$${KEYCLOAK_VERSION}.tar.gz
 
 # Usuario keycloak con directorio home
 useradd -r -m -d /home/keycloak -s /bin/bash keycloak || true
@@ -226,8 +227,13 @@ sudo -u keycloak bin/kcadm.sh update realms/master \
 # Crear realm fosil automáticamente
 echo "[$(date)] Creando realm 'fosil' con usuarios y cliente OAuth2 Grafana..." >> /tmp/user-data.log
 sleep 5
+
+# IP pública de Grafana inyectada por Terraform
+GRAFANA_PUBLIC_IP="${grafana_public_ip}"
+echo "[$(date)] Grafana IP pública desde Terraform: $GRAFANA_PUBLIC_IP" >> /tmp/user-data.log
+
 cd /opt/fosil/VPN-IAM/scripts
-sudo -u ubuntu /opt/fosil/VPN-IAM/scripts/create-realm.sh --auto 2>&1 | tee -a /tmp/user-data.log
+sudo -u ubuntu /opt/fosil/VPN-IAM/scripts/create-realm.sh --auto --grafana-ip "$GRAFANA_PUBLIC_IP" 2>&1 | tee -a /tmp/user-data.log
 
 if [ $? -eq 0 ]; then
   echo "[$(date)] Realm 'fosil' creado exitosamente" >> /tmp/user-data.log
