@@ -20,7 +20,7 @@
 
 - 🚀 **Deployment 100% Automatizado** - Un único `terraform apply` despliega toda la infraestructura (10-12 min)
 - 🛡️ **Defensa en Profundidad** - 5 capas de seguridad: WAF → SIEM → IAM → VPN → Hardening
-- 📊 **Mejora Medible de Seguridad** - Score CIS Benchmark: 45% → 65% (+20%)
+- 📊 **Mejora Medible de Seguridad** - Score CIS Benchmark: 45% → 57% (+12%)
 - 🔍 **17 Reglas de Detección Custom** - Cubren OWASP Top 10, fuerza bruta, integridad de archivos y análisis comportamental
 - 🎯 **Cero Pasos Manuales** - Realm Keycloak, agentes Wazuh, servicios Kong auto-configurados
 
@@ -55,7 +55,7 @@ terraform output infrastructure_summary
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        AWS VPC 10.0.1.0/24                          │
 │                          us-west-2 (Oregon)                         │
-├─────────────────────────────────────────────────────────────────────┤
+├──────────────────────────────────────────────────────────────��──────┤
 │                                                                     │
 │  ┌──────────────────┐         ┌──────────────────┐                  │
 │  │  Wazuh SIEM      │◀────────│  WAF/Kong        │◀───── Internet   │
@@ -79,7 +79,7 @@ terraform output infrastructure_summary
 │  ┌──────────────────┐                                               │
 │  │  Hardening VM    │                                               │
 │  │  10.0.1.40       │                                               │
-│  │  CIS L1 (65%)    │                                               │
+│  │  CIS L1 (57%)    │                                               │
 │  │  t3.micro        │                                               │
 │  └──────────────────┘                                               │
 │                                                                     │
@@ -108,7 +108,7 @@ terraform output infrastructure_summary
 - Túnel IPSec → Conectividad segura site-to-site
 
 **Monitoreo y Detección**
-- 5 agentes Wazuh → SIEM centralizado
+- 4 agentes Wazuh → SIEM centralizado
 - 4 casos de uso: Fuerza bruta SSH, ataques web, integridad de archivos, analítica IAM
 - Alertas en tiempo real sobre eventos de seguridad
 
@@ -131,7 +131,7 @@ terraform output infrastructure_summary
   2. Ataques web - OWASP Top 10 (reglas 100010-100014)
   3. Monitoreo de integridad de archivos (reglas 100020-100023)
   4. Analítica comportamental IAM (reglas 100040-100043)
-- **5 agentes**: Monitoreando todos los componentes de infraestructura
+- **4 agentes**: Monitoreando todos los componentes de infraestructura (WAF, VPN/IAM, Hardening, Grafana)
 - **Mapeo MITRE ATT&CK** para inteligencia de amenazas
 
 [→ Documentación completa SIEM](SIEM/README.md)
@@ -163,7 +163,7 @@ terraform output infrastructure_summary
   2. Auditoría del sistema (auditd con 15+ reglas)
   3. Acceso administrativo seguro (hardening SSH + fail2ban)
   4. Integración SIEM (agente Wazuh con FIM)
-- **Mejora medible**: Score SCA 45% → 65% (+20%)
+- **Mejora medible**: Score SCA 45% → 57% (+12%)
 - **Script automatizado**: Hardening con un único comando y reinicio automático
 
 [→ Documentación completa Hardening](Hardening/README.md)
@@ -187,6 +187,21 @@ Cada componente tiene documentación detallada con procedimientos de testing y t
 | **VPN/IAM** | Setup Keycloak, configuración VPN, integración OAuth2 | [VPN-IAM/README.md](VPN-IAM/README.md) |
 | **Hardening** | Script CIS Benchmark, mejora SCA, FIM | [Hardening/README.md](Hardening/README.md) |
 
+### 📸 Evidencia de Funcionamiento
+
+Documentación visual completa con screenshots demostrando el funcionamiento de todos los componentes:
+
+**[→ Ver EVIDENCIA.md](EVIDENCIA.md)**
+
+Incluye capturas de:
+- Deployment automatizado con Terraform
+- 4 agentes Wazuh activos + 17 reglas custom
+- WAF bloqueando ataques OWASP Top 10
+- Integración WAF → SIEM
+- OAuth2 Grafana + Keycloak funcionando
+- Hardening CIS: Score 45% → 57%
+- WireGuard + IPSec conectividad demostrada
+
 ---
 
 ## 🧪 Testing y Validación
@@ -200,7 +215,7 @@ export WAF_IP=$(terraform output -raw waf_public_ip)
 # SQL Injection → 403 Forbidden
 curl -i 'http://'"$WAF_IP"'/?id=1%27%20OR%20%271%27=%271'
 
-# Rate limiting → 429 después de 20 requests
+# Rate limiting ��� 429 después de 20 requests
 for i in {1..25}; do curl -s -o /dev/null -w "%{http_code}\n" http://$WAF_IP/api/telemetria; done
 ```
 
@@ -259,11 +274,11 @@ Este proyecto cumple con todos los requisitos del curso "Seguridad en Redes y Da
 | **2d) Integración WAF → SIEM** | Agente Wazuh monitoreando error.log | ✅ |
 | **3a) SIEM** | Wazuh 4.13 | ✅ |
 | **3b) 3 Casos de Uso (1 auth)** | 4 casos de uso, 17 reglas custom | ✅ |
-| **3c) Integración** | 5 agentes Wazuh | ✅ |
+| **3c) Integración** | 4 agentes Wazuh activos | ✅ |
 | **4a) IAM OAuth2/OIDC** | Keycloak 23.0.0 | ✅ |
 | **4b) Analítica Comportamental** | Reglas 100040-100043 | ✅ |
 | **5a) Scripts Hardening** | Script bash CIS L1 | ✅ |
-| **5b) CIS Benchmark** | Score SCA 65% | ✅ |
+| **5b) CIS Benchmark** | Score SCA 57% (+12%) | ✅ |
 | **5c) Firewall + Auditoría + SSH + SIEM** | UFW + auditd + SSH:2222 + Wazuh | ✅ |
 
 ---
