@@ -215,7 +215,7 @@ export WAF_IP=$(terraform output -raw waf_public_ip)
 # SQL Injection → 403 Forbidden
 curl -i 'http://'"$WAF_IP"'/?id=1%27%20OR%20%271%27=%271'
 
-# Rate limiting ��� 429 después de 20 requests
+# Rate limiting después de 20 requests
 for i in {1..25}; do curl -s -o /dev/null -w "%{http_code}\n" http://$WAF_IP/api/telemetria; done
 ```
 
@@ -291,9 +291,6 @@ Este proyecto cumple con todos los requisitos del curso "Seguridad en Redes y Da
 cd terraform
 terraform destroy -auto-approve
 ```
-
-Costo estimado si se deja corriendo: ~$50-70/mes (principalmente instancias m7i-flex.large y c7i-flex.large)
-
 ---
 
 ## 👤 Autor

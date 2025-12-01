@@ -184,9 +184,9 @@
 
   <!-- Login desde IP externa -->
   <rule id="100042" level="8">
-    <if_sid>100040</if_sid>
+    <if_matched_sid>100040</if_matched_sid>
     <field name="message" negate="yes">ipAddress=10\.0\.</field>
-    <description>Keycloak: Login desde IP externa (no VPC)</description>
+    <description>Keycloak: Login fallido desde IP externa (no VPC)</description>
     <mitre>
       <id>T1078</id>
     </mitre>
@@ -194,9 +194,9 @@
 
   <!-- Login fuera de horario laboral -->
   <rule id="100043" level="7">
-    <if_sid>100040</if_sid>
+    <if_matched_sid>100040</if_matched_sid>
     <time>6 pm - 9 am</time>
-    <description>Keycloak: Login fuera de horario laboral</description>
+    <description>Keycloak: Login fallido fuera de horario laboral</description>
   </rule>
 
 </group>
