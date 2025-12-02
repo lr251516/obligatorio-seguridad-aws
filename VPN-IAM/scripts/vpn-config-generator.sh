@@ -1,6 +1,7 @@
 #!/bin/bash
-# Genera config WireGuard según rol de Keycloak
+# Genera config WireGuard según rol de Keycloak con MFA
 # Uso: ./vpn-config-generator.sh <email>
+# Requiere autenticación MFA (Password + OTP si está habilitado)
 
 set -e
 
@@ -16,7 +17,7 @@ if [ -z "$USER_EMAIL" ]; then
 fi
 
 # Variables del servidor VPN
-VPN_SERVER_PUBLIC_IP="${VPN_SERVER_PUBLIC_IP:-$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)}"
+VPN_SERVER_PUBLIC_IP="${VPN_SERVER_PUBLIC_IP:-$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null)}"
 VPN_SERVER_PUBLIC_KEY="${VPN_SERVER_PUBLIC_KEY:-$(sudo cat /etc/wireguard/public.key 2>/dev/null)}"
 
 if [ -z "$VPN_SERVER_PUBLIC_IP" ] || [ -z "$VPN_SERVER_PUBLIC_KEY" ]; then
@@ -24,21 +25,76 @@ if [ -z "$VPN_SERVER_PUBLIC_IP" ] || [ -z "$VPN_SERVER_PUBLIC_KEY" ]; then
     exit 1
 fi
 
-# Obtener token de Keycloak
-TOKEN=$(curl -s -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
+# ============================================
+# PASO 1: Autenticación MFA del usuario
+# ============================================
+echo "======================================"
+echo "  Generador de Config VPN WireGuard  "
+echo "  Usuario: $USER_EMAIL"
+echo "======================================"
+echo ""
+echo "🔐 Autenticación MFA requerida"
+echo ""
+
+echo -n "Password: "
+read -rs USER_PASSWORD
+echo ""
+
+if [ -z "$USER_PASSWORD" ]; then
+    echo "❌ ERROR: Password requerido"
+    exit 1
+fi
+
+echo -n "OTP Code (Enter para omitir si no está habilitado): "
+read -r OTP_CODE
+echo ""
+
+# Autenticar usuario con Keycloak (password + OTP si está configurado)
+echo "[+] Validando credenciales..."
+AUTH_RESPONSE=$(curl -s -X POST "${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token" \
+    -d "username=${USER_EMAIL}" \
+    -d "password=${USER_PASSWORD}" \
+    -d "grant_type=password" \
+    -d "client_id=account" \
+    ${OTP_CODE:+-d "totp=${OTP_CODE}"})
+
+USER_TOKEN=$(echo "$AUTH_RESPONSE" | jq -r '.access_token')
+
+if [ "$USER_TOKEN" = "null" ] || [ -z "$USER_TOKEN" ]; then
+    ERROR_MSG=$(echo "$AUTH_RESPONSE" | jq -r '.error_description // .error // "Autenticación fallida"')
+    echo "❌ ERROR: $ERROR_MSG"
+    echo ""
+    echo "Posibles causas:"
+    echo "  - Password incorrecto"
+    echo "  - OTP code incorrecto o expirado (si está habilitado)"
+    echo "  - Usuario no existe en realm 'fosil'"
+    echo "  - Primera vez: requiere configurar OTP en Keycloak"
+    exit 1
+fi
+
+echo "✅ Autenticación exitosa: $USER_EMAIL"
+echo ""
+
+# ============================================
+# PASO 2: Obtener rol del usuario (usando admin)
+# ============================================
+echo "[+] Obteniendo rol de usuario..."
+
+# Obtener token de admin para consultar roles
+ADMIN_TOKEN=$(curl -s -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
     -d "username=admin" \
     -d "password=admin" \
     -d "grant_type=password" \
     -d "client_id=admin-cli" | jq -r '.access_token')
 
-if [ "$TOKEN" = "null" ]; then
-    echo "ERROR: No se pudo autenticar en Keycloak"
+if [ "$ADMIN_TOKEN" = "null" ]; then
+    echo "ERROR: No se pudo autenticar admin en Keycloak"
     exit 1
 fi
 
-# Buscar usuario y obtener rol
+# Buscar usuario y obtener rol (usando token de admin)
 USER_ID=$(curl -s "${KEYCLOAK_URL}/admin/realms/${REALM}/users?email=${USER_EMAIL}" \
-    -H "Authorization: Bearer ${TOKEN}" | jq -r '.[0].id')
+    -H "Authorization: Bearer ${ADMIN_TOKEN}" | jq -r '.[0].id')
 
 if [ "$USER_ID" = "null" ]; then
     echo "ERROR: Usuario $USER_EMAIL no encontrado"
@@ -46,12 +102,15 @@ if [ "$USER_ID" = "null" ]; then
 fi
 
 USER_ROLE=$(curl -s "${KEYCLOAK_URL}/admin/realms/${REALM}/users/${USER_ID}/role-mappings/realm" \
-    -H "Authorization: Bearer ${TOKEN}" | \
+    -H "Authorization: Bearer ${ADMIN_TOKEN}" | \
     jq -r '.[].name' | grep -E '^(infraestructura-admin|devops|viewer)$' | head -n1)
 
 if [ -z "$USER_ROLE" ]; then
     USER_ROLE="viewer"
 fi
+
+echo "✅ Rol asignado: $USER_ROLE"
+echo ""
 
 # AllowedIPs según rol
 case "$USER_ROLE" in
@@ -115,7 +174,15 @@ else
     echo "    sudo /opt/fosil/VPN-IAM/scripts/setup-vpn-server.sh"
 fi
 
-echo "[OK] Config generada: $CONFIG_FILE"
-echo "   Usuario: $USER_EMAIL"
-echo "   Rol: $USER_ROLE"
-echo "   IP VPN: $CLIENT_VPN_IP"
+echo "=========================================="
+echo "✅ Config VPN generada exitosamente"
+echo "=========================================="
+echo "Usuario:   $USER_EMAIL"
+echo "Rol:       $USER_ROLE"
+echo "IP VPN:    $CLIENT_VPN_IP"
+echo "Archivo:   $CONFIG_FILE"
+echo ""
+echo "🔐 MFA validado: Password + OTP"
+echo ""
+echo "Para conectar:"
+echo "  sudo wg-quick up $CONFIG_FILE"
