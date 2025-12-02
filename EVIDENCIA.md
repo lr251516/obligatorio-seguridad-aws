@@ -461,37 +461,27 @@ sudo bash vpn-config-generator.sh jperez@fosil.uy
 
 ![VPN Script MFA Prompt](evidencia/29c-vpn-mfa-prompt.png)
 
+```
 **Validación:**
 - Password de Keycloak: `Admin123!`
 - OTP Code (6 dígitos): `[código desde Google Authenticator]`
 - Si OTP incorrecto o vacío → `❌ ERROR: OTP Code requerido para MFA`
-
-**Captura 4:** Autenticación MFA exitosa y generación de config VPN
-
-![VPN MFA Success](evidencia/29d-vpn-mfa-success.png)
-
-**Output esperado:**
 ```
+
+```
+**Output esperado:**
 ✅ Autenticación exitosa: jperez@fosil.uy
 ✅ Rol asignado: infraestructura-admin
 ✅ Config VPN generada exitosamente
 🔐 MFA validado: Password + OTP
 ```
 
-#### Verificación Técnica
+**Captura 4:** Autenticación MFA exitosa y generación de config VPN
 
-**Cliente Keycloak "account" con Direct Access Grants habilitado:**
+![VPN MFA Success](evidencia/29d-vpn-mfa-success.png)
 
-**Captura 5:** Cliente "account" configurado en Keycloak
-
-![Keycloak Account Client](evidencia/29e-keycloak-account-client.png)
-
-**Verificación en UI:**
-- Admin Console → Realm "fosil" → Clients → "account"
-- Settings → Direct access grants enabled: **ON**
-- Permite autenticación programática con `totp` parameter
-
-**Configuración automática:** El script `create-realm.sh` habilita esto durante deployment.
+**Validación:**
+- VPN conectada correctamente.
 
 ---
 
