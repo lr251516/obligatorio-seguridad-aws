@@ -1,25 +1,37 @@
 # VPN + IAM
 
-Sistema dual de VPN (site-to-site + remote access) con gestión de identidad centralizada.
+Infraestructura de conectividad segura y gestión de identidad centralizada.
 
 ---
 
-## 🎯 Componentes
+## 🎯 Arquitectura
 
-| Componente | Tecnología | Propósito |
-|------------|------------|-----------|
-| **IAM** | Keycloak 23.0.0 + PostgreSQL | Identity Provider OAuth2/OIDC |
-| **VPN Site-to-Site** | IPSec (strongSwan IKEv2) | Datacenter local ↔ AWS VPC |
-| **VPN Remote Access** | WireGuard | Acceso usuarios con políticas por rol |
-| **Visualización** | Grafana + Keycloak OAuth2 | Dashboards con autenticación centralizada |
+```
+Internet
+   │
+   ├─── VPN Site-to-Site (IPSec)
+   │    └─ Datacenter Local ↔ AWS VPC
+   │
+   ├─── VPN Remote Access (WireGuard + MFA)
+   │    └─ Usuarios con políticas por rol IAM
+   │
+   └─── IAM (Keycloak OAuth2/OIDC)
+        └─ Identity Provider + TOTP MFA
+```
 
-**Estado:** ✅ Completamente funcional
+**Componentes:**
+- **Keycloak 23.0.0**: Identity Provider con OAuth2/OIDC
+- **IPSec (strongSwan IKEv2)**: Túnel site-to-site datacenter ↔ cloud
+- **WireGuard**: VPN remote access con políticas granulares por rol
+- **PostgreSQL**: Backend Keycloak
+
+**IP VM:** `10.0.1.30` (subnet privada), puerto `8080` (Keycloak HTTP)
 
 ---
 
 ## 1. Keycloak IAM
 
-### Acceso Admin Console
+### Acceso
 
 ```
 URL: http://<VPN_PUBLIC_IP>:8080
@@ -27,401 +39,265 @@ Usuario: admin
 Password: admin
 ```
 
-**⚠️ Proyecto académico:** HTTP sin TLS
+⚠️ **Proyecto académico:** HTTP sin TLS, contraseñas hardcodeadas.
 
-### Realm "fosil" (Creado Automáticamente)
+### Realm "fosil" (Automático)
 
-El realm "fosil" se crea automáticamente durante el deployment vía `vpn-init.sh`.
+El realm se crea automáticamente en deployment. **No requiere pasos manuales.**
 
-**No requiere pasos manuales** - Esperar ~5 minutos después de `terraform apply`.
+**Incluye:**
+- **3 usuarios** con MFA TOTP obligatorio
+- **3 roles** para políticas VPN y Grafana
+- **1 cliente OAuth2** para Grafana
 
-**Verificar creación:**
+| Email | Password | Rol | VPN Access |
+|-------|----------|-----|------------|
+| jperez@fosil.uy | Admin123! | infraestructura-admin | Full VPC (10.0.1.0/24) |
+| mgonzalez@fosil.uy | DevOps123! | devops | SIEM + WAF (10.0.1.20, 10.0.1.10) |
+| arodriguez@fosil.uy | Viewer123! | viewer | Solo SIEM (10.0.1.20) |
+
+**Verificar realm creado:**
 ```bash
-# Verificar que realm existe
 curl -s http://<VPN_IP>:8080/realms/fosil | jq .realm
 # Esperado: "fosil"
 ```
-
-**Realm incluye:**
-
-**3 Roles definidos:**
-- `infraestructura-admin`: Full access VPC (10.0.1.0/24) → Grafana Admin
-- `devops`: SIEM + WAF (10.0.1.20, 10.0.1.10) → Grafana Editor
-- `viewer`: Solo SIEM read-only (10.0.1.20) → Grafana Viewer
-
-**3 Usuarios de prueba:**
-
-| Email | Password | Rol | Grafana Role |
-|-------|----------|-----|--------------|
-| jperez@fosil.uy | Admin123! | infraestructura-admin | Admin |
-| mgonzalez@fosil.uy | DevOps123! | devops | Editor |
-| arodriguez@fosil.uy | Viewer123! | viewer | Viewer |
-
-**1 Cliente OAuth2:**
-- `grafana-oauth`: Cliente para autenticación Grafana
-  - Client Secret: `grafana-secret-2024`
-  - Redirect URIs: `http://*:3000/*` (wildcard para IPs públicas/privadas)
-  - Protocol Mapper: Incluye roles en token para mapeo automático
 
 ---
 
 ## 2. VPN Site-to-Site (IPSec)
 
-Túnel IPSec IKEv2 entre datacenter local (Multipass VM) y AWS VPC.
+Túnel IKEv2 entre datacenter local y AWS VPC.
 
-### Topología
-
+**Topología:**
 ```
-Datacenter Local          Internet           AWS VPC
-10.100.0.0/24       <-- IPSec Túnel -->   10.0.1.0/24
-(Multipass VM)         IKEv2 + PSK        (VPN VM 10.0.1.30)
-                                                 │
-                                            Acceso a:
-                                            - Wazuh (10.0.1.20)
-                                            - WAF (10.0.1.10)
-                                            - Hardening (10.0.1.40)
+Datacenter Local          AWS VPC
+10.100.0.0/24            10.0.1.0/24
+(Multipass VM)     <-->  (VPN VM)
+                IPSec
 ```
 
-### Setup Datacenter (Multipass VM en Mac)
+### Setup Datacenter
 
 ```bash
-# 1. Crear VM datacenter
+# 1. Crear VM local (Multipass en Mac)
 multipass launch --name datacenter --cpus 1 --memory 1G --disk 5G
 multipass shell datacenter
 
-# 2. Clonar repo
-sudo apt update && sudo apt install -y git
+# 2. Configurar IPSec
 git clone https://github.com/lr251516/obligatorio-seguridad-aws.git
 cd obligatorio-seguridad-aws/VPN-IAM/scripts
-
-# 3. Configurar IPSec
 chmod +x setup-ipsec-datacenter.sh
 sudo ./setup-ipsec-datacenter.sh
+# Ingresar: IP pública AWS + PSK
 ```
 
-**El script pedirá:**
-- IP pública AWS VPN VM (ej: `54.185.123.59`)
-- PSK (Pre-Shared Key) - ej: `FosilSecureKey2024!`
-
-### Setup AWS VPN VM
+### Setup AWS
 
 ```bash
-# Conectar a AWS VPN VM
-ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw vpn_public_ip)
-
-# Ejecutar script IPSec
+ssh -i ~/.ssh/obligatorio-srd ubuntu@<VPN_IP>
 cd /opt/fosil/VPN-IAM/scripts
-chmod +x setup-ipsec-aws.sh
 sudo ./setup-ipsec-aws.sh
+# Ingresar: IP pública local + mismo PSK
 ```
 
-**El script pedirá:**
-- IP pública local (`103.30.133.214`)
-- **Mismo PSK** usado en datacenter
-
-### Verificar Conectividad
-
-```bash
-# Desde Multipass VM datacenter
-sudo ipsec status
-# Esperado: aws-vpn[1]: ESTABLISHED
-
-# Test ping a VMs AWS
-ping 10.0.1.20  # Wazuh
-ping 10.0.1.10  # WAF
-ping 10.0.1.30  # VPN/IAM
-ping 10.0.1.40  # Hardening
-
-# Script de testing completo
-cd obligatorio-seguridad-aws/VPN-IAM/scripts
-chmod +x test-ipsec-connectivity.sh
-./test-ipsec-connectivity.sh
-```
-
-**Resultado esperado:**
-- Túnel: `ESTABLISHED`
-- Conectividad: 4/4 VMs accesibles
-- Latencia: ~200-300ms (normal para VPN)
-
-**Características del túnel:**
-- IKEv2 con AES_CBC_256/HMAC_SHA2_256_128
-- Perfect Forward Secrecy (PFS)
-- PSK authentication
-
----
-
-## 3. VPN Remote Access (WireGuard)
-
-VPN con políticas granulares basadas en roles Keycloak.
-
-### Setup Servidor WireGuard (en VM VPN)
-
-```bash
-ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw vpn_public_ip)
-cd /opt/fosil/VPN-IAM/scripts
-sudo ./setup-vpn-server.sh
-```
-
-### Generar Configuración por Usuario
-
-```bash
-# En VM VPN, configurar variables
-export VPN_SERVER_PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
-export VPN_SERVER_PUBLIC_KEY=$(sudo cat /etc/wireguard/public.key)
-
-# Generar config para usuario
-./vpn-config-generator.sh jperez@fosil.uy
-
-# Output: /opt/fosil/vpn-configs/jperez-infraestructura-admin.conf
-```
-
-### Usar en Cliente
-
-```bash
-# Copiar config a máquina local
-scp -i ~/.ssh/obligatorio-srd ubuntu@<VPN_IP>:/opt/fosil/vpn-configs/jperez-infraestructura-admin.conf ~/
-
-# Conectar (macOS/Linux)
-sudo wg-quick up ~/jperez-infraestructura-admin.conf
-
-# Verificar acceso
-ping 10.0.1.20  # Wazuh (todos los roles)
-ping 10.0.1.10  # WAF (solo infraestructura-admin y devops)
-
-# Desconectar
-sudo wg-quick down ~/jperez-infraestructura-admin.conf
-```
-
-### Políticas por Rol
-
-| Rol | AllowedIPs (Recursos Accesibles) |
-|-----|----------------------------------|
-| `infraestructura-admin` | `10.0.1.0/24` (todas las VMs) |
-| `devops` | `10.0.1.20/32, 10.0.1.10/32` (SIEM + WAF) |
-| `viewer` | `10.0.1.20/32` (solo SIEM) |
-
-**Implementación automática:** El script `vpn-config-generator.sh` lee roles desde Keycloak y genera AllowedIPs dinámicamente.
-
----
-
-## 4. Integración OAuth2 con Grafana
-
-Grafana está configurado para autenticación centralizada con Keycloak OAuth2.
-
-### Configuración Automática
-
-El deployment automático configura:
-1. **Grafana** con OAuth2 client (`grafana-oauth`)
-2. **Keycloak** con protocol mapper para incluir roles
-3. **Mapeo automático** de roles Keycloak → Grafana
-
-### Acceso a Grafana
-
-```
-URL: http://<GRAFANA_IP>:3000
-```
-
-**Opción 1 - OAuth2 (Recomendado):**
-1. Click en "Sign in with Keycloak"
-2. Login con usuario Keycloak:
-   - `jperez@fosil.uy` / `Admin123!` → Grafana Admin
-   - `mgonzalez@fosil.uy` / `DevOps123!` → Grafana Editor
-   - `arodriguez@fosil.uy` / `Viewer123!` → Grafana Viewer
-
-**Opción 2 - Local:**
-- Usuario: `admin`
-- Password: `admin`
-
-### Mapeo de Roles
-
-El mapeo se configura automáticamente en `/etc/grafana/grafana.ini`:
-
-```ini
-[auth.generic_oauth]
-role_attribute_path = contains(roles[*], 'infraestructura-admin') && 'Admin' || contains(roles[*], 'devops') && 'Editor' || 'Viewer'
-```
-
-| Rol Keycloak | Rol Grafana | Permisos |
-|--------------|-------------|----------|
-| `infraestructura-admin` | Admin | Full access (users, data sources, settings) |
-| `devops` | Editor | Crear/editar dashboards, NO admin |
-| `viewer` | Viewer | Solo lectura |
-
-### Verificar Configuración
-
-```bash
-# Ver configuración OAuth2
-ssh -i ~/.ssh/obligatorio-srd ubuntu@<GRAFANA_IP>
-sudo grep -A 15 '\[auth.generic_oauth\]' /etc/grafana/grafana.ini
-```
-
----
-
-## 📁 Archivos de Configuración
-
-### Keycloak
-
-```bash
-# Config principal
-/opt/keycloak/conf/keycloak.conf
-
-# Logs
-/opt/keycloak/data/log/keycloak.log
-
-# Verificar status
-sudo systemctl status keycloak
-```
-
-### WireGuard
-
-```bash
-# Config servidor
-/etc/wireguard/wg0.conf
-
-# Claves
-/etc/wireguard/private.key
-/etc/wireguard/public.key
-
-# Verificar status
-sudo systemctl status wg-quick@wg0
-sudo wg show
-```
-
-### IPSec (strongSwan)
-
-```bash
-# Configuración
-/etc/ipsec.conf
-/etc/ipsec.secrets
-
-# Ver status túnel
-sudo ipsec status
-sudo ipsec statusall
-
-# Logs
-sudo journalctl -u strongswan-starter -f
-```
-
----
-
-## 🧪 Testing
-
-### Test 1: Keycloak Realm
-
-```bash
-# Verificar que realm "fosil" existe
-curl -s http://<VPN_IP>:8080/realms/fosil | jq .realm
-# Esperado: "fosil"
-```
-
-### Test 2: IPSec Túnel
+### Verificar
 
 ```bash
 # Desde Multipass VM
 sudo ipsec status
 # Esperado: ESTABLISHED
 
-# Ping a Wazuh desde datacenter
-ping -c 3 10.0.1.20
-# Esperado: 3 packets received
-```
-
-### Test 3: WireGuard Políticas
-
-```bash
-# Generar config de viewer (solo SIEM)
-./vpn-config-generator.sh arodriguez@fosil.uy
-
-# Verificar AllowedIPs en config generado
-grep "AllowedIPs" /opt/fosil/vpn-configs/arodriguez-viewer.conf
-# Esperado: AllowedIPs = 10.0.1.20/32
-```
-
----
-
-## 🔒 Behavioral Analytics (Keycloak → Wazuh)
-
-Keycloak genera eventos de autenticación que Wazuh procesa con reglas custom:
-
-**Rules implementadas:**
-- `100040`: Login desde IP sospechosa
-- `100041`: Múltiples logins fallidos
-- `100042`: Login fuera de horario laboral
-- `100043`: Cambio de contraseña sospechoso
-
-**Archivos:**
-- Logs Keycloak: `/opt/keycloak/data/log/keycloak.log`
-- Reglas Wazuh: `/var/ossec/etc/rules/local_rules.xml` (en SIEM VM)
-
----
-
-## 🔐 Seguridad y Autenticación
-
-### Multi-Factor Authentication (MFA)
-
-**Implementación:** MFA de doble capa (TOTP + Criptografía)
-
-El sistema implementa **autenticación multi-factor completa** en dos niveles:
-
-#### Capa 1: MFA en Provisioning (Keycloak TOTP)
-
-Antes de generar la configuración VPN, el usuario debe autenticarse con:
-
-| Factor | Implementación | Propósito |
-|--------|----------------|-----------|
-| **Conocimiento** | Password de Keycloak | Verifica identidad del usuario |
-| **Posesión** | OTP de Google Authenticator | Segundo factor temporal (6 dígitos) |
-
-**Flujo de provisioning:**
-```bash
-# Ejecutar en VPN VM
-cd /opt/fosil/VPN-IAM/scripts
-sudo bash vpn-config-generator.sh jperez@fosil.uy
-
-# El script solicita:
-# 1. Password de Keycloak: Admin123!
-# 2. OTP Code (6 dígitos): [código desde Google Authenticator]
+# Test conectividad
+ping 10.0.1.20  # Wazuh
+ping 10.0.1.10  # WAF
 ```
 
 **Características:**
-- ✅ OTP **obligatorio** - No permite omitir segundo factor
-- ✅ Usuarios forzados a configurar OTP en primer login (`requiredActions=["CONFIGURE_TOTP"]`)
-- ✅ Validación Keycloak antes de generar configuración VPN
-- ✅ Integración con Keycloak IAM para lectura de roles
+- IKEv2 con AES_CBC_256/HMAC_SHA2_256_128
+- Perfect Forward Secrecy (PFS)
+- PSK authentication
 
-#### Capa 2: MFA en Conexión (WireGuard Cryptographic)
+---
 
-Una vez provisionado, la conexión VPN usa autenticación criptográfica:
+## 3. VPN Remote Access (WireGuard + MFA)
 
-| Factor | Implementación | Seguridad |
-|--------|----------------|-----------|
-| **Posesión** | Clave privada única por usuario | ✅ Curve25519 (256-bit) |
-| **Conocimiento** | Archivo .conf protegido | ✅ Solo usuario autorizado |
+### Setup Servidor
 
-**Ventajas capa criptográfica:**
-- ✅ **Imposible de hacer phishing** - No hay código de 6 dígitos en la conexión
-- ✅ **Perfect Forward Secrecy** - Compromiso de clave no compromete sesiones pasadas
-- ✅ **Zero Trust por defecto** - Políticas granulares (AllowedIPs) por identidad
-- ✅ **Session hijacking prevention** - Túnel encriptado ChaCha20-Poly1305
+```bash
+ssh -i ~/.ssh/obligatorio-srd ubuntu@<VPN_IP>
+cd /opt/fosil/VPN-IAM/scripts
+sudo ./setup-vpn-server.sh
+```
 
-**Protección contra ataques:**
-- ✅ **Credential stuffing:** Password + OTP en provisioning
-- ✅ **Brute force:** Criptografía asimétrica + rate limiting Keycloak
-- ✅ **MitM:** Handshake criptográfico Noise Protocol
-- ✅ **Config theft:** Archivo .conf inútil sin conocer AllowedIPs específicos del rol
+**Automático:** Genera claves, configura interfaz `wg0`, levanta servicio.
 
-### Políticas Granulares por Identidad
+### Generar Config Usuario (con MFA)
 
-**Cumplimiento requisito obligatorio 1b:**
-> "La solución debe permitir asignar políticas granulares de acceso dependiendo de la identidad de quien se conecte"
+```bash
+# En VM VPN
+export VPN_SERVER_PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+export VPN_SERVER_PUBLIC_KEY=$(sudo cat /etc/wireguard/public.key)
 
-**Implementación:**
-- Script `vpn-config-generator.sh` lee roles desde **Keycloak IAM**
-- Genera `AllowedIPs` específicos por rol (network segmentation)
-- Enforcement a nivel IP (imposible de bypassear)
-- Behavioral analytics en Wazuh SIEM (rules 100040-100043)
+# Ejecutar script (requiere MFA)
+./vpn-config-generator.sh jperez@fosil.uy
+```
 
-**Resultado:** Zero Trust Network Access basado en identidad verificada por IAM.
+**El script solicita:**
+1. **Password de Keycloak:** `Admin123!`
+2. **OTP Code (6 dígitos):** Código de Google Authenticator
+
+**Output:** `/opt/fosil/vpn-configs/jperez-infraestructura-admin.conf`
+
+**Políticas por rol (AllowedIPs automáticos):**
+- `infraestructura-admin` → `10.0.1.0/24` (todas las VMs)
+- `devops` → `10.0.1.20/32, 10.0.1.10/32` (SIEM + WAF)
+- `viewer` → `10.0.1.20/32` (solo SIEM)
+
+### Conectar desde Cliente
+
+```bash
+# Copiar config a máquina local
+scp -i ~/.ssh/obligatorio-srd ubuntu@<VPN_IP>:/opt/fosil/vpn-configs/jperez-*.conf ~/
+
+# Conectar
+sudo wg-quick up ~/jperez-infraestructura-admin.conf
+
+# Verificar
+ping 10.0.1.20  # Wazuh (accesible para todos los roles)
+
+# Desconectar
+sudo wg-quick down ~/jperez-infraestructura-admin.conf
+```
+
+---
+
+## 4. Multi-Factor Authentication (MFA)
+
+### Implementación de Doble Capa
+
+**Capa 1: MFA en Provisioning (TOTP)**
+
+Antes de generar config VPN, el usuario autentica con Keycloak:
+
+| Factor | Tecnología | Propósito |
+|--------|------------|-----------|
+| Conocimiento | Password de Keycloak | Verifica identidad |
+| Posesión | OTP (Google Authenticator) | Segundo factor temporal |
+
+**Características:**
+- ✅ OTP **obligatorio** - No permite omitir
+- ✅ Auto-configuración: `requiredActions=["CONFIGURE_TOTP"]` en primer login
+- ✅ Keycloak valida antes de permitir generación de config VPN
+
+**Capa 2: MFA en Conexión (Criptográfico)**
+
+Una vez provisionado, WireGuard usa autenticación criptográfica:
+
+| Factor | Tecnología |
+|--------|------------|
+| Posesión | Clave privada Curve25519 (256-bit) |
+| Conocimiento | Archivo .conf protegido |
+
+**Ventajas:**
+- ✅ Imposible phishing (no hay código de 6 dígitos en conexión)
+- ✅ Perfect Forward Secrecy (PFS)
+- ✅ Zero Trust (políticas granulares por identidad)
+
+### Configuración OTP (Primera Vez)
+
+**Automático al primer login en Grafana:**
+
+1. Login con `jperez@fosil.uy` / `Admin123!`
+2. Keycloak fuerza configuración OTP (pantalla con QR code)
+3. Escanear QR con Google Authenticator
+4. Ingresar código de 6 dígitos para verificar
+5. ✅ OTP configurado
+
+**Uso posterior:** Cada vez que el script VPN pida OTP, usar código de Google Authenticator.
+
+---
+
+## 5. Integración OAuth2 con Grafana
+
+Grafana usa Keycloak para autenticación centralizada.
+
+**Acceso:**
+```
+URL: http://<GRAFANA_IP>:3000
+Método: Click "Sign in with Keycloak"
+```
+
+**Mapeo automático de roles:**
+
+| Rol Keycloak | Rol Grafana | Permisos |
+|--------------|-------------|----------|
+| infraestructura-admin | Admin | Full access (users, settings) |
+| devops | Editor | Crear/editar dashboards |
+| viewer | Viewer | Solo lectura |
+
+**Configuración automática:** El deployment configura cliente OAuth2 `grafana-oauth` con secret `grafana-secret-2024`.
+
+---
+
+## 6. IAM Behavioral Analytics
+
+Keycloak genera logs de autenticación procesados por Wazuh SIEM:
+
+**Reglas custom:**
+- `100040`: Login fallido (level 5)
+- `100041`: Brute force - 5+ intentos en 300s (level 10)
+- `100042`: Login desde IP externa a VPC (level 8)
+- `100043`: Login fuera de horario laboral (level 7)
+
+**Archivos:**
+- Logs: `/opt/keycloak/data/log/keycloak.log` (formato JSON)
+- Reglas: `/var/ossec/etc/rules/local_rules.xml` (en SIEM VM)
+
+---
+
+## 🧪 Testing Rápido
+
+```bash
+# 1. Verificar realm Keycloak
+curl -s http://<VPN_IP>:8080/realms/fosil | jq .realm
+
+# 2. Túnel IPSec (desde Multipass VM)
+sudo ipsec status
+ping -c 3 10.0.1.20
+
+# 3. WireGuard server
+ssh ubuntu@<VPN_IP> "sudo wg show"
+
+# 4. Generar config VPN con MFA
+./vpn-config-generator.sh jperez@fosil.uy
+# Ingresar: Password + OTP
+
+# 5. Verificar AllowedIPs en config
+grep "AllowedIPs" /opt/fosil/vpn-configs/jperez-*.conf
+# Esperado: 10.0.1.0/24 (infraestructura-admin)
+```
+
+---
+
+## 📁 Archivos Clave
+
+```bash
+# Keycloak
+/opt/keycloak/conf/keycloak.conf          # Config principal
+/opt/keycloak/data/log/keycloak.log       # Logs JSON
+sudo systemctl status keycloak            # Service status
+
+# WireGuard
+/etc/wireguard/wg0.conf                   # Server config
+/etc/wireguard/private.key                # Server private key
+/etc/wireguard/public.key                 # Server public key
+sudo wg show                              # Active connections
+
+# IPSec
+/etc/ipsec.conf                           # IPSec config
+/etc/ipsec.secrets                        # PSK
+sudo ipsec status                         # Tunnel status
+```
 
 ---
 

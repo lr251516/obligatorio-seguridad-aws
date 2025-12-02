@@ -447,15 +447,11 @@ sudo ipsec status
 2. Ingresar código de 6 dígitos para verificar
 3. OTP configurado exitosamente
 
-**Captura 3:** Google Authenticator mostrando token "jperez@fosil.uy"
-
-![Google Authenticator Token](evidencia/29c-google-auth-token.png)
-
 #### MFA en Provisioning VPN
 
 **Script `vpn-config-generator.sh` requiere autenticación MFA antes de generar config:**
 
-**Captura 4:** Script solicitando Password de Keycloak + OTP Code
+**Captura 3:** Script solicitando Password de Keycloak + OTP Code
 
 ```bash
 ssh ubuntu@<VPN_IP>
@@ -463,16 +459,16 @@ cd /opt/fosil/VPN-IAM/scripts
 sudo bash vpn-config-generator.sh jperez@fosil.uy
 ```
 
-![VPN Script MFA Prompt](evidencia/29d-vpn-mfa-prompt.png)
+![VPN Script MFA Prompt](evidencia/29c-vpn-mfa-prompt.png)
 
 **Validación:**
 - Password de Keycloak: `Admin123!`
 - OTP Code (6 dígitos): `[código desde Google Authenticator]`
 - Si OTP incorrecto o vacío → `❌ ERROR: OTP Code requerido para MFA`
 
-**Captura 5:** Autenticación MFA exitosa y generación de config VPN
+**Captura 4:** Autenticación MFA exitosa y generación de config VPN
 
-![VPN MFA Success](evidencia/29e-vpn-mfa-success.png)
+![VPN MFA Success](evidencia/29d-vpn-mfa-success.png)
 
 **Output esperado:**
 ```
@@ -486,9 +482,9 @@ sudo bash vpn-config-generator.sh jperez@fosil.uy
 
 **Cliente Keycloak "account" con Direct Access Grants habilitado:**
 
-**Captura 6:** Cliente "account" configurado en Keycloak
+**Captura 5:** Cliente "account" configurado en Keycloak
 
-![Keycloak Account Client](evidencia/29f-keycloak-account-client.png)
+![Keycloak Account Client](evidencia/29e-keycloak-account-client.png)
 
 **Verificación en UI:**
 - Admin Console → Realm "fosil" → Clients → "account"
