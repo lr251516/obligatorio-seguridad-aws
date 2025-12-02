@@ -1,72 +1,68 @@
 # Hardening CIS Benchmark Level 1
 
-VM Ubuntu 22.04 con **Wazuh SCA** demostrando mejora de postura de seguridad mediante aplicación de **CIS Benchmark Level 1**.
+VM Ubuntu 22.04 con Wazuh SCA demostrando mejora de seguridad mediante CIS Benchmark Level 1.
 
 ---
 
 ## 🎯 Objetivo
 
-Cumplir con los **4 requisitos del obligatorio** mediante script automatizado:
+Cumplir **4 requisitos del obligatorio** mediante script automatizado:
 
 1. ✅ **Firewall local** (UFW)
 2. ✅ **Auditoría del sistema** (auditd)
 3. ✅ **Acceso administrativo seguro** (SSH + fail2ban)
-4. ✅ **Integración con SIEM** (Wazuh agent)
+4. ✅ **Integración con SIEM** (Wazuh agent + FIM)
 
-### SCA Score Mejora
+**IP VM:** `10.0.1.40` (t3.micro)
 
-| Estado | SCA Score | Descripción |
-|--------|-----------|-------------|
-| **ANTES** | 45% | Sistema vanilla sin hardening |
-| **DESPUÉS** | **65%** | Script CIS aplicado |
+### Mejora SCA
 
-**Mejora: +20% (de 45% → 65%)**
+| Estado | Score | Descripción |
+|--------|-------|-------------|
+| ANTES | 45% | Sistema vanilla sin hardening |
+| DESPUÉS | **57%** | Script CIS aplicado |
+
+**Mejora: +12 puntos porcentuales**
 
 ---
 
 ## 🚀 Deployment
 
-### 1. Deployment Automático (Terraform)
-
-La VM se levanta en **modo vanilla** (sin hardening):
+### 1. Deployment Automático (Vanilla)
 
 ```bash
 terraform apply -auto-approve
 ```
 
-VM incluye:
-- Wazuh Agent conectado al SIEM
-- FIM configurado para archivos críticos
-- Sin hardening CIS aplicado
+**VM incluye automáticamente:**
+- Wazuh Agent conectado
+- FIM configurado
+- **Sin hardening CIS** (modo vanilla para demo)
 
-### 2. Capturar SCA Baseline (ANTES)
+### 2. Capturar SCA Baseline
 
-1. Wazuh Dashboard → **Security Configuration Assessment**
-2. Seleccionar agente **hardening-vm**
-3. Screenshot del score inicial (**~45%**)
+1. Wazuh Dashboard → Security Configuration Assessment
+2. Seleccionar **hardening-vm**
+3. Screenshot score inicial (~45%)
 
-### 3. Aplicar CIS Hardening
+### 3. Aplicar Hardening
 
 ```bash
-# Conectar a VM
 ssh -i ~/.ssh/obligatorio-srd ubuntu@<HARDENING_IP>
-
-# Ejecutar script
 cd /opt/fosil/Hardening/scripts
 sudo bash apply-cis-hardening.sh
-
 # VM reinicia automáticamente
 ```
 
-### 4. Verificar SCA Mejorado (DESPUÉS)
+### 4. Verificar SCA Mejorado
 
-Esperar 2-3 min después del reboot:
+**Esperar 2-3 min después del reboot**
 
-1. Wazuh Dashboard → **Security Configuration Assessment**
+1. Wazuh Dashboard → Security Configuration Assessment
 2. Agente **hardening-vm**
-3. Screenshot del score mejorado (**~65%**)
+3. Screenshot score mejorado (~57%)
 
-**Reconectar SSH:**
+**Reconectar SSH (puerto cambió a 2222):**
 ```bash
 ssh -p 2222 -i ~/.ssh/obligatorio-srd ubuntu@<HARDENING_IP>
 ```
@@ -77,30 +73,27 @@ ssh -p 2222 -i ~/.ssh/obligatorio-srd ubuntu@<HARDENING_IP>
 
 ### 1. Firewall Local (UFW)
 
-- Default deny incoming
-- Default allow outgoing
-- SSH puerto 2222
-- Wazuh agent (puertos 1514, 1515)
+- Default deny incoming / allow outgoing
+- Puertos: SSH 2222, Wazuh 1514/1515
 - Logging activado
 
-**Verificar:**
 ```bash
 sudo ufw status verbose
+# Esperado: Status: active, puertos permitidos
 ```
 
-### 2. Auditoría del Sistema (auditd)
+### 2. Auditoría (auditd)
 
-Reglas CIS para:
+**Reglas CIS:**
 - Cambios en `/etc/passwd`, `/etc/shadow`, `/etc/group`
-- Cambios en `/etc/ssh/sshd_config`
-- Cambios en `/etc/sudoers`
+- Cambios en `/etc/ssh/sshd_config`, `/etc/sudoers`
 - Módulos kernel (insmod, rmmod, modprobe)
 - File deletions por usuarios
 - Cambios de permisos (chmod, chown)
 
-**Verificar:**
 ```bash
-sudo auditctl -l | wc -l  # Debe mostrar 15+ reglas
+sudo auditctl -l | wc -l
+# Esperado: 15+ reglas activas
 ```
 
 ### 3. Acceso Administrativo Seguro
@@ -110,101 +103,85 @@ sudo auditctl -l | wc -l  # Debe mostrar 15+ reglas
 - PermitRootLogin no
 - MaxAuthTries 4
 - Algoritmos fuertes (ChaCha20, AES-256-GCM)
-- Banner de advertencia
 
 **Fail2ban:**
-- SSH protection puerto 2222
+- Puerto SSH 2222
 - Bantime: 1800s (30 min)
 - Maxretry: 5 intentos
 
 **Password Policies:**
 - Longitud mínima: 14 caracteres
-- 4 clases de caracteres requeridas
-- Password aging: 90 días máximo
+- 4 clases de caracteres
+- Password aging: 90 días
 
-**Verificar:**
 ```bash
 systemctl is-active fail2ban
 sudo fail2ban-client status sshd
+# Esperado: active, 0 banned IPs inicialmente
 ```
 
-### 4. Integración con SIEM (Wazuh)
+### 4. Integración SIEM
 
 - Wazuh agent activo
-- FIM monitoreando archivos críticos
-- Logs de auditd enviados a SIEM
+- FIM monitoreando `/etc/passwd`, `/etc/shadow`, `/etc/ssh/sshd_config`
+- Logs auditd enviados a SIEM
 
-**Verificar:**
 ```bash
 systemctl is-active wazuh-agent
-sudo /var/ossec/bin/agent_control -i 001  # Ver info del agente
+# Esperado: active
 ```
 
 ---
 
 ## 🧪 Testing
 
-### Test 1: SSH puerto 2222
-
 ```bash
+# 1. SSH puerto 2222
 ssh -p 2222 -i ~/.ssh/obligatorio-srd ubuntu@<HARDENING_IP>
-```
 
-### Test 2: UFW activo
-
-```bash
+# 2. UFW activo
 sudo ufw status
-# Esperado: Status: active
-```
 
-### Test 3: Auditd funcionando
-
-```bash
+# 3. Auditd funcionando
 sudo ausearch -k passwd | tail -5
-```
 
-### Test 4: Fail2ban SSH brute force
-
-```bash
-# Desde otra máquina, 6 intentos fallidos
+# 4. Fail2ban SSH brute force
 for i in {1..6}; do ssh -p 2222 wronguser@<HARDENING_IP>; done
-
-# En hardening VM, verificar ban
 sudo fail2ban-client status sshd
-```
+# Esperado: 1 banned IP
 
-### Test 5: FIM en Wazuh
-
-```bash
+# 5. FIM en Wazuh
 sudo echo "test:x:9999:9999::/tmp:/bin/false" >> /etc/passwd
-# Ver alerta inmediata en Wazuh Dashboard: Rule 100020
+# Ver alerta en Wazuh Dashboard: Rule 100020
 ```
 
 ---
 
 ## 📁 Archivos
 
-### Scripts
-- [apply-cis-hardening.sh](scripts/apply-cis-hardening.sh) - Script productivo (65% SCA)
+```bash
+# Script productivo
+/opt/fosil/Hardening/scripts/apply-cis-hardening.sh
 
-### Configuraciones Aplicadas
-- `/etc/audit/rules.d/cis.rules` - Reglas auditd
-- `/etc/ssh/sshd_config.d/99-cis.conf` - SSH hardening
-- `/etc/fail2ban/jail.local` - Fail2ban SSH
-- `/etc/security/pwquality.conf` - Password policies
+# Configuraciones aplicadas
+/etc/audit/rules.d/cis.rules              # Auditd CIS
+/etc/ssh/sshd_config.d/99-cis.conf        # SSH hardening
+/etc/fail2ban/jail.local                  # Fail2ban SSH
+/etc/security/pwquality.conf              # Password policies
+```
 
 ---
 
 ## ⚠️ Importante
 
-Después de aplicar hardening:
+**Después de aplicar hardening:**
 
-1. **SSH puerto 2222** (no 22)
-2. **UFW activo** - Deny incoming por defecto
-3. **Fail2ban activo** - Banea después de 5 intentos fallidos
-4. **VM reinicia** automáticamente al finalizar script
+1. SSH puerto **2222** (no 22)
+2. UFW activo - Deny incoming por defecto
+3. Fail2ban - Banea después de 5 intentos
+4. VM reinicia automáticamente
 
-Si pierdes acceso SSH: usar **AWS EC2 Instance Connect** desde AWS Console.
+**Si pierdes acceso SSH:** Usar AWS EC2 Instance Connect desde AWS Console.
 
 ---
 

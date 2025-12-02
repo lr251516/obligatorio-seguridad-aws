@@ -1,48 +1,25 @@
 # SIEM - Wazuh
 
-Wazuh SIEM con 17 reglas personalizadas implementando 4 casos de uso de detección.
+Wazuh SIEM con 17 reglas custom implementando 4 casos de uso de detección.
 
 ---
 
 ## 🎯 Componentes
 
-| Componente | Versión | Propósito |
-|------------|---------|-----------|
-| **Wazuh Manager** | 4.13.1 | SIEM central, procesamiento reglas |
-| **Wazuh Indexer** | 4.13.1 | OpenSearch para almacenamiento logs |
-| **Wazuh Dashboard** | 4.13.1 | UI web análisis y visualización |
-| **Wazuh Agents** | 4.13.1 | 4 agentes monitoreando VMs |
+**Wazuh 4.13.1 All-in-One:**
+- **Manager**: SIEM central, procesamiento de reglas
+- **Indexer**: OpenSearch para almacenamiento de logs
+- **Dashboard**: UI web (HTTPS)
 
-**Estado:** ✅ 100% funcional - 4 casos de uso testeados
+**Agentes:** 4 VMs monitoreadas automáticamente
+
+**IP VM:** `10.0.1.20` (m7i-flex.large, 8GB RAM)
 
 **Deployment:** 100% automatizado vía `terraform/user-data/wazuh-init.sh`
 
 ---
 
-## 📊 Infraestructura Monitoreada
-
-### 4 Agentes Wazuh Conectados
-
-| Agente | Hostname | IP Privada | Monitoreo |
-|--------|----------|------------|-----------|
-| **001** | waf-kong | 10.0.1.10 | Nginx + Kong + ModSecurity logs |
-| **002** | vpn-iam | 10.0.1.30 | Keycloak + SSH + VPN logs |
-| **003** | hardening-vm | 10.0.1.40 | FIM + SSH + CIS SCA |
-| **004** | grafana | 10.0.1.50 | Grafana + SSH logs |
-
-**Nota:** El servidor Wazuh (10.0.1.20) es el manager central, no aparece como agente.
-
-**Verificar agentes:**
-```bash
-ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw wazuh_public_ip)
-sudo /var/ossec/bin/agent_control -l
-```
-
-**Esperado:** 4 agentes en estado `Active` (waf-kong, vpn-iam, hardening-vm, grafana)
-
----
-
-## 🔐 Acceso Wazuh Dashboard
+## 🔐 Acceso
 
 ```
 URL: https://<WAZUH_PUBLIC_IP>
@@ -50,406 +27,224 @@ Usuario: admin
 Password: (ejecutar en VM: sudo cat /root/wazuh-passwords.txt)
 ```
 
-**Primer acceso:** Navegar a **Security events** para ver alertas en tiempo real.
+**Navegar a:** Security events → Ver alertas en tiempo real
 
 ---
 
-## 🚨 Casos de Uso Implementados
+## 📊 Agentes Conectados
 
-**Resumen de testing:**
+| ID | Hostname | IP | Monitoreo |
+|----|----------|-------|-----------|
+| 001 | waf-kong | 10.0.1.10 | Nginx + ModSecurity + Kong |
+| 002 | vpn-iam | 10.0.1.30 | Keycloak + SSH |
+| 003 | hardening-vm | 10.0.1.40 | FIM + SSH + CIS SCA |
+| 004 | grafana | 10.0.1.50 | Grafana + SSH |
 
-| Caso | Descripción | Reglas | Status |
-|------|-------------|--------|--------|
-| **1** | Brute Force SSH (Autenticación) | 100001-100004 | ✅ 100% funcional |
-| **2** | Ataques Web OWASP Top 10 | 100010-100014 | ✅ 100% funcional |
-| **3** | File Integrity Monitoring | 100020-100023 | ✅ 100% funcional |
-| **4** | IAM Behavioral Analytics | 100040-100043 | ✅ 100% funcional |
-
-**Total:** 17 reglas custom + 4 casos de uso testeados (2025-11-28)
+**Verificar:**
+```bash
+ssh ubuntu@<WAZUH_IP> "sudo /var/ossec/bin/agent_control -l"
+# Esperado: 4 agentes Active
+```
 
 ---
 
-### Caso 1: Brute Force SSH (Autenticación)
+## 🚨 Casos de Uso
 
-**Objetivo:** Detectar múltiples intentos fallidos de autenticación SSH
+| # | Descripción | Reglas | Testing |
+|---|-------------|--------|---------|
+| 1 | SSH Brute Force (Autenticación) | 100001-100004 | ✅ 2025-11-21 |
+| 2 | Ataques Web OWASP Top 10 | 100010-100014 | ✅ 2025-11-21 |
+| 3 | File Integrity Monitoring | 100020-100023 | ✅ 2025-11-21 |
+| 4 | IAM Behavioral Analytics | 100040-100043 | ✅ 2025-11-28 |
 
-**Reglas:** 100001, 100004, 100002, 100003
+**Total:** 17 reglas custom
 
-**Status:** ✅ 100% funcional (testeado 2025-11-21)
+---
 
-**Lógica de detección:**
+## Caso 1: SSH Brute Force
 
-```
-Evento Base (Wazuh ruleset)
-    ├─ Rule 5503: SSH authentication failed (usuario válido)
-    └─ Rule 5710: SSH non-existent user
+**Detección:** Múltiples intentos fallidos SSH
 
-Correlación (Custom rules)
-    ├─ Rule 100001: 3+ intentos en 120s (si 5503) → Nivel 10
-    ├─ Rule 100004: 3+ intentos en 120s (si 5710) → Nivel 10
-    │
-    └─ Escalación (if_sid 100001 OR 100004)
-        ├─ Rule 100002: Desde IP externa (fuera 10.0.1.0/24) → Nivel 12
-        └─ Rule 100003: Usuario privilegiado (root/admin/ubuntu) → Nivel 12
-```
+**Reglas:**
+- `100001`: 3+ intentos fallidos (usuario válido) en 120s → Level 10
+- `100004`: 3+ intentos fallidos (usuario inexistente) en 120s → Level 10
+- `100002`: Escalación si origen es IP externa → Level 12
+- `100003`: Escalación si usuario privilegiado (root/admin) → Level 12
 
 **Testing:**
-
 ```bash
-# Conectar a hardening VM (puerto 2222)
+# Generar 6 intentos fallidos
 HARDENING_IP=$(terraform output -raw hardening_public_ip)
-
-# Generar 5 intentos fallidos con usuario inexistente
-for i in {1..5}; do ssh -p 2222 wronguser@$HARDENING_IP; done
+for i in {1..6}; do ssh wronguser@$HARDENING_IP -p 2222; sleep 3; done
 ```
 
 **Verificar en Wazuh Dashboard:**
-- Filtro: `rule.id: (100001 OR 100004 OR 100002 OR 100003)`
-- Esperado: Alertas de correlación SSH brute force
+- Filtro: `rule.id: (100001 OR 100004)`
+- Esperado: 2+ alertas en ~2 minutos
 
-**Evidencia:**
+**CLI:**
 ```bash
-# En VM Wazuh
-sudo grep 'Rule: 100004' /var/ossec/logs/alerts/alerts.log
-# Resultado: Múltiples alertas con threshold 3 intentos/120s
+ssh ubuntu@<WAZUH_IP>
+sudo grep 'Rule: 100004' /var/ossec/logs/alerts/alerts.log | tail -5
 ```
 
 ---
 
-### Caso 2: WAF → SIEM Integration (Ataques Web OWASP Top 10)
+## Caso 2: Ataques Web (OWASP Top 10)
 
-**Objetivo:** Detectar y alertar ataques web bloqueados por ModSecurity
+**Detección:** WAF ModSecurity → SIEM integration
 
-**Reglas:** 100010-100014
-
-**Status:** ✅ 100% funcional (testeado 2025-11-21)
-
-**Parent rule hierarchy:**
-```
-Rule 31301: ModSecurity base event
-  └─ Rule 31331: ModSecurity "Access denied"
-      └─ Rule 31333: ModSecurity "with code 403" ← Reglas custom usan este
-```
-
-**Reglas custom implementadas:**
-
-| Rule ID | Ataque | Patterns | Nivel |
-|---------|--------|----------|-------|
-| **100010** | SQL Injection | `sql`, `union`, `select`, `%27%20OR` | 10 |
-| **100011** | XSS | `script`, `onerror`, `alert` | 10 |
-| **100012** | RCE | `exec`, `eval`, `system` | 10 |
-| **100013** | Path Traversal | `..%2F`, `etc%2Fpasswd`, `passwd` | 10 |
-| **100014** | Scanner Detection | `nikto`, `sqlmap`, `nmap` | 10 |
-
-**⚠️ Importante:** Patterns incluyen versiones **URL-encoded** (`%27`, `%2F`) para detectar ataques ofuscados.
+**Reglas:**
+- `100010`: SQL Injection → Level 10
+- `100011`: XSS → Level 10
+- `100012`: Remote Code Execution → Level 12
+- `100013`: Path Traversal → Level 10
+- `100014`: Scanner Detection → Level 8
 
 **Testing:**
-
 ```bash
 WAF_IP=$(terraform output -raw waf_public_ip)
 
-# SQL Injection (URL-encoded)
-curl "http://$WAF_IP/?id=1' OR '1'='1"
+# SQL Injection
+curl -v "http://$WAF_IP/?id=1%27%20OR%20%271%27%3D%271"
+# Esperado: 403 Forbidden
 
 # XSS
-curl "http://$WAF_IP/?search=<script>alert(1)</script>"
+curl -v "http://$WAF_IP/?search=%3Cscript%3Ealert%281%29%3C%2Fscript%3E"
+# Esperado: 403 Forbidden
 
 # Path Traversal
-curl "http://$WAF_IP/?file=../../etc/passwd"
-
-# Scanner detection
-curl -A "nikto/2.1.6" http://$WAF_IP/
+curl -v "http://$WAF_IP/?file=..%2F..%2Fetc%2Fpasswd"
+# Esperado: 403 Forbidden
 ```
 
-**Esperado:** Todos devuelven `403 Forbidden`
-
 **Verificar en Wazuh Dashboard:**
-- Filtro: `rule.id: (100010 OR 100011 OR 100013 OR 100014)`
-- Esperado: Eventos ModSecurity con detalles del ataque
+- Filtro: `rule.id: (100010 OR 100011 OR 100013)`
+- Esperado: 3+ alertas con detalles del ataque
 
 **Logs monitoreados:**
-- `/var/log/nginx/error.log` (agent waf-kong)
-- Formato: syslog (compatible con Wazuh decoders)
+- `/var/log/nginx/error.log` (agent: waf-kong)
 
 ---
 
-### Caso 3: File Integrity Monitoring (FIM)
+## Caso 3: File Integrity Monitoring
 
-**Objetivo:** Detectar modificaciones en archivos críticos del sistema
+**Detección:** Cambios en archivos críticos del sistema
 
-**Reglas:** 100020-100023
-
-**Status:** ✅ 100% funcional (testeado 2025-11-21)
-
-**Archivos monitoreados (agente hardening-vm):**
-
-| Path | Regla | Nivel | Criticidad |
-|------|-------|-------|------------|
-| `/etc/passwd` | 100020 | 12 | CRITICAL |
-| `/etc/shadow` | 100021 | 15 | CRITICAL |
-| `/etc/ssh/sshd_config` | 100022 | 10 | HIGH |
-| `/etc/ufw/*` | 100023 | 10 | HIGH |
-
-**Lógica de detección:**
-
-```
-Evento Base (Wazuh FIM)
-    └─ Rule 550: Integrity checksum changed
-
-Escalación por archivo (Custom rules)
-    ├─ Rule 100020: /etc/passwd modificado → Nivel 12
-    ├─ Rule 100021: /etc/shadow modificado → Nivel 15
-    ├─ Rule 100022: SSH config modificado → Nivel 10
-    └─ Rule 100023: Firewall config modificado → Nivel 10
-```
+**Reglas:**
+- `100020`: /etc/passwd modificado → Level 12
+- `100021`: /etc/shadow modificado → Level 15
+- `100022`: SSH config modificado → Level 10
+- `100023`: Firewall config modificado → Level 10
 
 **Testing:**
-
 ```bash
-# Conectar a hardening VM
-ssh -i ~/.ssh/obligatorio-srd -p 2222 ubuntu@$(terraform output -raw hardening_public_ip)
+ssh -i ~/.ssh/obligatorio-srd -p 2222 ubuntu@<HARDENING_IP>
 
 # Modificar /etc/passwd
-sudo echo "test_fim:x:9999:9999::/tmp:/bin/false" >> /etc/passwd
+sudo echo "test:x:9999:9999::/tmp:/bin/false" >> /etc/passwd
 ```
 
 **Verificar en Wazuh Dashboard:**
 - Filtro: `rule.id: 100020`
-- Esperado: Alerta inmediata (< 30 seg) con diff del archivo
+- Esperado: Alerta inmediata (< 30s) con diff del archivo
 
-**Evidencia:**
-```bash
-# En VM Wazuh
-sudo grep 'Rule: 100020' /var/ossec/logs/alerts/alerts.log
-```
+**FIM configurado en:**
+- `/etc/passwd`, `/etc/shadow`
+- `/etc/ssh/sshd_config`
+- `/etc/ufw/`, `/etc/iptables/`
 
 ---
 
-### Caso 4: IAM Behavioral Analytics (Keycloak)
+## Caso 4: IAM Behavioral Analytics
 
-**Objetivo:** Detectar comportamiento anómalo en eventos de autenticación IAM
+**Detección:** Comportamiento anómalo en Keycloak
 
-**Reglas:** 100040-100043
-
-**Status:** ✅ 100% funcional 
-
-**Eventos monitoreados:**
-
-| Rule ID | Evento | Trigger | Nivel | Status |
-|---------|--------|---------|-------|--------|
-| **100040** | Login fallido | `type=LOGIN_ERROR` en logs Keycloak | 5 | ✅ Funciona |
-| **100041** | Brute force IAM | 5+ logins fallidos en 300s | 10 | ✅ Funciona |
-| **100042** | Login desde IP externa | IP no pertenece a VPC (10.0.x.x) | 8 | ✅ Funciona |
-| **100043** | Login fuera horario | Intento entre 6pm-9am | 7 | ✅ Implementado |
-
-**Logs monitoreados:**
-- `/opt/keycloak/data/log/keycloak.log` (formato JSON, agent vpn-iam)
-
-**Lógica de detección:**
-
-```
-Evento Base (Keycloak JSON logs)
-    └─ Wazuh detecta: {"message":"type=LOGIN_ERROR,..."}
-
-Escalación condicional (Custom rules)
-    ├─ Rule 100040: Base - cualquier LOGIN_ERROR → Nivel 5
-    ├─ Rule 100042: LOGIN_ERROR + IP externa → Nivel 8 (reemplaza 100040)
-    ├─ Rule 100043: LOGIN_ERROR + horario 6pm-9am → Nivel 7 (reemplaza 100040)
-    └─ Rule 100041: 5+ veces rule 100040 en 300s → Nivel 10 (correlación)
-```
+**Reglas:**
+- `100040`: Login fallido → Level 5
+- `100041`: Brute force (5+ intentos en 300s) → Level 10
+- `100042`: Login desde IP externa (no VPC) → Level 8
+- `100043`: Login fuera horario (6pm-9am) → Level 7
 
 **Testing:**
-
 ```bash
-# 1. Verificar logs Keycloak en VPN/IAM VM
-ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw vpn_public_ip)
-sudo tail -f /opt/keycloak/data/log/keycloak.log | grep LOGIN_ERROR
-
-# 2. Generar eventos LOGIN_ERROR (Keycloak Admin Console)
-# Abrir: http://<VPN_IP>:8080/admin/master/console/
-# Ingresar credenciales INCORRECTAS 6 veces:
-#   - Usuario: testuser123
-#   - Password: wrongpass
-#   - Click "Sign In" (repetir 6 veces en < 2 minutos)
-
-# 3. Verificar en Wazuh Dashboard
-# Filtro: rule.id: (100040 OR 100042)
-# Resultado esperado:
-#   - 6+ alertas de rule 100042 (IP externa)
-#   - Timestamp agrupados en < 5 minutos
+# Generar logins fallidos en Keycloak
+# URL: http://<VPN_IP>:8080
+# Intentar login 6 veces con credenciales incorrectas
 ```
 
-**Verificar en CLI:**
+**Verificar en Wazuh Dashboard:**
+- Filtro: `rule.id: (100040 OR 100042)`
+- Esperado: Múltiples alertas agrupadas en ~2 min
 
-```bash
-# En Wazuh Manager VM
-ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw wazuh_public_ip)
-
-# Ver alertas IAM recientes
-sudo grep 'Rule: 100040\|Rule: 100042' /var/ossec/logs/alerts/alerts.log | tail -20
-
-# Contar eventos por regla (últimas 24h)
-sudo grep "$(date +%Y\ %b\ %d)" /var/ossec/logs/alerts/alerts.log | \
-  grep -o 'Rule: 1000[4][0-3]' | sort | uniq -c
-```
+**Logs monitoreados:**
+- `/opt/keycloak/data/log/keycloak.log` (formato JSON, agent: vpn-iam)
 
 **Evidencia de testing (2025-11-28):**
-
-- **100040**: Login fallido desde IP interna → Level 5 ✅
-- **100042**: 15+ eventos generados (12:09-12:11) → Level 8 ✅
-- **100041**: Correlación de 5+ eventos en 300s detectada ✅
-- **100043**: Implementado (no testeado - requiere login 6pm-9am)
-
-**Ejemplo de log Keycloak detectado:**
-
-```json
-{
-  "timestamp": "2025-11-28T17:31:47.841-03:00",
-  "loggerName": "org.keycloak.events",
-  "level": "WARN",
-  "message": "type=LOGIN_ERROR, realmId=52f96014-..., clientId=security-admin-console, userId=null, ipAddress=104.30.133.214, error=user_not_found, username=aaa",
-  "hostName": "vpn-iam"
-}
-```
-
-**Nota importante:**
-- Reglas 100042 y 100043 usan `<if_matched_sid>` (no `<if_sid>`) para **reemplazar** la alerta base 100040 cuando cumplen condiciones específicas
-- Esto evita alertas duplicadas y prioriza la de mayor severidad
+- `100040`: Login fallido desde IP interna → Level 5 ✅
+- `100042`: 15+ eventos en 2 min desde IP externa → Level 8 ✅
+- `100041`: Correlación de 5+ eventos detectada → Level 10 ✅
 
 ---
 
-## 📁 Archivos de Configuración
-
-### Wazuh Manager
+## 📁 Archivos Clave
 
 ```bash
-# Config principal
-/var/ossec/etc/ossec.conf
-
 # Reglas custom
-/var/ossec/etc/rules/local_rules.xml
+/var/ossec/etc/rules/local_rules.xml     # 17 reglas custom
 
-# Logs de alertas
-/var/ossec/logs/alerts/alerts.log
-/var/ossec/logs/alerts/alerts.json
+# Configuración agentes
+/var/ossec/etc/ossec.conf                # Manager config
+/var/ossec/etc/shared/default/agent.conf # Agent config (FIM, localfile)
 
-# Ver reglas cargadas
-sudo /var/ossec/bin/wazuh-logtest
-```
+# Logs
+/var/ossec/logs/alerts/alerts.log        # Alertas en texto plano
+/var/ossec/logs/ossec.log                # Log del manager
 
-### Wazuh Agents
+# Verificar reglas
+sudo grep -E '<rule id="100' /var/ossec/etc/rules/local_rules.xml
 
-Cada agente tiene configuración específica en `/var/ossec/etc/ossec.conf`:
-
-**waf-kong (10.0.1.10):**
-```xml
-<localfile>
-  <log_format>syslog</log_format>
-  <location>/var/log/nginx/error.log</location>
-</localfile>
-```
-
-**hardening-vm (10.0.1.40):**
-```xml
-<syscheck>
-  <directories check_all="yes">/etc/passwd,/etc/shadow,/etc/ssh/sshd_config,/etc/ufw</directories>
-  <frequency>300</frequency>
-</syscheck>
-```
-
-**vpn-iam (10.0.1.30):**
-```xml
-<localfile>
-  <log_format>syslog</log_format>
-  <location>/opt/keycloak/data/log/keycloak.log</location>
-</localfile>
+# Reiniciar manager (después de cambios)
+sudo systemctl restart wazuh-manager
 ```
 
 ---
 
-## 🔧 Comandos Útiles
-
-### Gestión de agentes
+## 🧪 Testing Completo
 
 ```bash
-# Listar todos los agentes
-sudo /var/ossec/bin/agent_control -l
+# 1. Verificar 4 agentes activos
+ssh ubuntu@<WAZUH_IP> "sudo /var/ossec/bin/agent_control -l"
 
-# Ver info de agente específico
-sudo /var/ossec/bin/agent_control -i 004
+# 2. Test SSH Brute Force
+for i in {1..6}; do ssh wronguser@<HARDENING_IP> -p 2222; sleep 3; done
 
-# Ver último keep-alive
-sudo /var/ossec/bin/agent_control -l | grep "is available"
-```
+# 3. Test WAF → SIEM
+curl "http://<WAF_IP>/?id=1%27%20OR%20%271%27%3D%271"
 
-### Ver alertas
+# 4. Test FIM
+ssh -p 2222 ubuntu@<HARDENING_IP>
+sudo echo "test" >> /etc/passwd
 
-```bash
-# Alertas en tiempo real
-sudo tail -f /var/ossec/logs/alerts/alerts.log
+# 5. Test IAM Analytics
+# Login fallido 6 veces en Keycloak UI
 
-# Filtrar por rule ID
-sudo grep 'Rule: 100010' /var/ossec/logs/alerts/alerts.log
-
-# Ver alertas en JSON
-sudo tail -f /var/ossec/logs/alerts/alerts.json | jq .
-```
-
-### Testing de reglas
-
-```bash
-# Logtest interactivo (testing reglas con log samples)
-sudo /var/ossec/bin/wazuh-logtest
-
-# Ver reglas cargadas
-sudo /var/ossec/bin/wazuh-logtest -l | grep "100[0-4][0-9]"
-```
-
-### Verificar configuración
-
-```bash
-# Validar ossec.conf
-sudo /var/ossec/bin/wazuh-control check
-
-# Ver decoders cargados
-sudo /var/ossec/bin/wazuh-logtest -D
+# 6. Ver alertas en Dashboard
+# https://<WAZUH_IP> → Security events
+# Filtros: rule.id: (100001 OR 100010 OR 100020 OR 100040)
 ```
 
 ---
 
-## 📋 Resumen Reglas Custom
+## 🔍 SCA (Security Configuration Assessment)
 
-**Total:** 17 reglas implementadas
+**CIS Benchmark Level 1 para Ubuntu 22.04 integrado automáticamente**
 
-| Caso de Uso | Rules | Status |
-|-------------|-------|--------|
-| **Brute Force SSH** | 100001-100003, 100004 | ✅ 100% |
-| **Ataques Web** | 100010-100014 | ✅ 100% |
-| **FIM** | 100020-100023 | ✅ 100% |
-| **IAM Analytics** | 100040-100043 | ⚠️ Implementado |
-
-**Archivo:** `/var/ossec/etc/rules/local_rules.xml`
-
-**Ver reglas:**
-```bash
-sudo cat /var/ossec/etc/rules/local_rules.xml | grep '<rule id'
-```
+**Ver score en Dashboard:**
+- Configuration Assessment → hardening-vm
+- Esperado antes hardening: ~45%
+- Esperado después hardening: ~57% (+12%)
 
 ---
 
-## 🎯 MITRE ATT&CK Mapping
-
-Todas las reglas custom están mapeadas a MITRE ATT&CK Framework:
-
-| Técnica | ID | Reglas |
-|---------|----|----|
-| **Brute Force** | T1110 | 100001, 100004, 100002, 100003 |
-| **Exploit Public-Facing Application** | T1190 | 100010-100014 |
-| **Modify Authentication Process** | T1556 | 100021 |
-| **Account Manipulation** | T1098 | 100040-100043 |
-
-**Ver en Dashboard:** Security events → MITRE ATT&CK
-
----
-
-**Documentación:** [README principal](../README.md) | [WAF](../WAF/README.md) | [VPN-IAM](../VPN-IAM/README.md) | [Hardening](../Hardening/README.md)
+**Documentación:** [README principal](../README.md) | [VPN-IAM](../VPN-IAM/README.md) | [WAF](../WAF/README.md) | [Hardening](../Hardening/README.md)

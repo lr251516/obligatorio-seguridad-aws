@@ -1,350 +1,227 @@
 # WAF + API Gateway
 
-Kong Gateway + ModSecurity WAF con OWASP Core Rule Set para protección de aplicaciones web.
+Kong Gateway + ModSecurity WAF con OWASP Core Rule Set.
 
 ---
 
 ## 🎯 Componentes
 
-| Componente | Versión | Propósito |
-|------------|---------|-----------|
-| **Kong Gateway** | 3.4.2 | API Gateway con routing, rate limiting, auth |
-| **ModSecurity** | 3.0 | Web Application Firewall (WAF) engine |
-| **OWASP CRS** | v3.3.5 | Core Rule Set para OWASP Top 10 |
-| **Nginx** | Custom build | Compilado con libmodsecurity3 |
-| **PostgreSQL** | 14 | Base de datos Kong |
+- **Kong Gateway 3.4.2**: API Gateway (routing, rate limiting, auth)
+- **ModSecurity 3.0**: Web Application Firewall engine
+- **OWASP CRS v3.3.5**: 800+ reglas OWASP Top 10
+- **Nginx**: Build custom con libmodsecurity3
+- **PostgreSQL 14**: DB Kong
 
-**Estado:** ✅ 100% funcional - Testing completo OWASP Top 10
+**IP VM:** `10.0.1.10` (t3.micro)
 
 **Deployment:** 100% automatizado vía `terraform/user-data/waf-init.sh`
 
 ---
 
-## 🛡️ Reglas WAF Implementadas
+## 🛡️ Reglas WAF
 
-### OWASP Core Rule Set (OWASP CRS v3.3.5)
+### OWASP Core Rule Set (CRS)
 
-Protección automática contra:
-- SQL Injection
-- Cross-Site Scripting (XSS)
-- Remote Code Execution (RCE)
-- Local File Inclusion (LFI)
-- Remote File Inclusion (RFI)
-- Command Injection
-- Session Fixation
-- HTTP Protocol Violations
-- Known Attacks & Scanners
-
-**Reglas activas:** 800+ del CRS
+**800+ reglas activas** protegiendo contra:
+- SQL Injection, XSS, RCE
+- LFI/RFI, Command Injection
+- Protocol violations, scanners
 
 ### 6 Reglas Custom ModSecurity
 
-| ID | Descripción | Acción | Status |
-|----|-------------|--------|--------|
-| **900001** | Admin panel solo desde red interna (10.0.1.0/24) | DENY 403 | ✅ Testeado |
-| **900002** | Path Traversal (`../`, `etc/passwd`, `boot.ini`) | DENY 403 | ✅ Testeado |
-| **900003** | XSS básico (`<script>`, `onerror=`, `javascript:`) | DENY 403 | ✅ Testeado |
-| **900004** | SQL Injection (`' OR`, `UNION SELECT`, `DROP`) | DENY 403 | ✅ Testeado |
-| **900006** | Credenciales en URL (`password=`, `token=`, `api_key=`) | DENY 403 | ✅ Testeado |
-| **900007** | Scanner user-agents (`sqlmap`, `nikto`, `nmap`, `masscan`) | DENY 403 | ✅ Testeado |
-
-**Nota sobre Rate Limiting:** El rate limiting se maneja exclusivamente por Kong Gateway (20 req/min en `/api/telemetria`), no por ModSecurity. Esto evita conflictos y asegura respuestas consistentes.
+| ID | Descripción | Acción | Testing |
+|----|-------------|--------|---------|
+| 900001 | Admin panel solo red interna (10.0.1.0/24) | DENY 403 | ✅ |
+| 900002 | Path Traversal (`../`, `etc/passwd`) | DENY 403 | ✅ |
+| 900003 | XSS básico (`<script>`, `onerror=`) | DENY 403 | ✅ |
+| 900004 | SQL Injection (`' OR`, `UNION`, `DROP`) | DENY 403 | ✅ |
+| 900006 | Credenciales en URL (`password=`, `token=`) | DENY 403 | ✅ |
+| 900007 | Scanner user-agents (`sqlmap`, `nikto`) | DENY 403 | ✅ |
 
 **Ubicación:** `/opt/coreruleset/rules/REQUEST-900-CUSTOM-RULES.conf`
 
 ---
 
-## 🚀 Deployment
+## 🚀 Setup
 
-### 1. Deployment Automático (Terraform)
-
-El script `terraform/user-data/waf-init.sh` instala automáticamente:
-- Kong Gateway + PostgreSQL
-- Nginx compilado con ModSecurity v3
-- OWASP CRS v3.3.5
-- 6 reglas WAF custom
-- Wazuh agent con logs integration
-- Security Group puerto 80 abierto
+### 1. Deployment Automático
 
 ```bash
 terraform apply -auto-approve
 ```
 
-### 2. Configurar Servicios Kong (Post-Deployment)
+**Instala automáticamente:**
+- Kong + PostgreSQL
+- Nginx + ModSecurity + OWASP CRS
+- 6 reglas custom
+- Wazuh agent + log integration
+- Puerto 80 abierto (Security Group)
+
+### 2. Configurar Servicios Kong
 
 ```bash
-# Conectar a VM WAF
-ssh -i ~/.ssh/obligatorio-srd ubuntu@$(terraform output -raw waf_public_ip)
-
-# Ejecutar script de configuración
+ssh -i ~/.ssh/obligatorio-srd ubuntu@<WAF_IP>
 cd /opt/fosil/WAF/scripts
 sudo ./configure-kong-services.sh
 ```
 
 **Servicios creados:**
-- **`/api/telemetria`** - API telemetría con rate limiting 20 req/min
-- **`/api/energia`** - API energía
-- **`/admin`** - Panel admin (bloqueado desde IPs externas)
-- **`/api/public`** - API pública testing
-- **`/`** - Ruta raíz testing general
+- `/api/telemetria` - Rate limiting 20 req/min
+- `/api/energia` - API energía
+- `/admin` - Bloqueado desde IPs externas
+- `/` - Testing general
 
 ---
 
 ## 🧪 Testing OWASP Top 10
 
-**Importante:** Para ver solo los códigos de estado HTTP en los tests, usa:
-- `curl -s -o /dev/null -w "%{http_code}\n"` para ver solo el código (ej: `403`)
-- `curl -i` para ver headers y código de estado completo
-- `curl` sin opciones mostrará el body completo de la respuesta (puede ser HTML/JSON de httpbin)
-
-Todos los tests desde máquina externa (internet):
-
+**Obtener IP:**
 ```bash
 export WAF_IP=$(terraform output -raw waf_public_ip)
 ```
 
-### Test 1: SQL Injection ✅
+### SQL Injection
 
 ```bash
-# OWASP CRS + Regla custom 900004 (usar URL encoding)
 curl -s -o /dev/null -w "%{http_code}\n" 'http://'"$WAF_IP"'/?id=1%27%20OR%20%271%27=%271'
-# O ver respuesta completa:
-curl -i 'http://'"$WAF_IP"'/?id=1%27%20OR%20%271%27=%271'
+# Esperado: 403
 ```
 
-**Esperado:** `403 Forbidden`
-**Wazuh:** Rule 31333 (ModSecurity) + Rule 100010 (custom)
+**Wazuh:** Rules 31333 + 100010
 
-**Nota:** `%27` = `'`, `%20` = espacio (URL encoding para evitar errores de curl)
-
-### Test 2: Cross-Site Scripting (XSS) ✅
+### XSS
 
 ```bash
-# OWASP CRS + Regla custom 900003
 curl -s -o /dev/null -w "%{http_code}\n" "http://$WAF_IP/?search=<script>alert(1)</script>"
-# O ver respuesta completa:
-curl -i "http://$WAF_IP/?search=<script>alert(1)</script>"
+# Esperado: 403
 ```
 
-**Esperado:** `403` (solo código HTTP) o `403 Forbidden` (con headers)
-**Wazuh:** Rule 31333 + Rule 100011
+**Wazuh:** Rules 31333 + 100011
 
-### Test 3: Path Traversal ✅
+### Path Traversal
 
 ```bash
-# Regla custom 900002
 curl -s -o /dev/null -w "%{http_code}\n" "http://$WAF_IP/?file=../../etc/passwd"
-# O ver respuesta completa:
-curl -i "http://$WAF_IP/?file=../../etc/passwd"
+# Esperado: 403
 ```
 
-**Esperado:** `403` (solo código HTTP) o `403 Forbidden` (con headers)
-**Wazuh:** Rule 31333 + Rule 100013
+**Wazuh:** Rules 31333 + 100013
 
-### Test 4: Credenciales en URL ✅
+### Credenciales en URL
 
 ```bash
-# Regla custom 900006
-curl -s -o /dev/null -w "%{http_code}\n" "http://$WAF_IP/?password=123456&token=abc"
-# O ver respuesta completa:
-curl -i "http://$WAF_IP/?password=123456&token=abc"
+curl -s -o /dev/null -w "%{http_code}\n" "http://$WAF_IP/?password=123&token=abc"
+# Esperado: 403
 ```
 
-**Esperado:** `403` (solo código HTTP) o `403 Forbidden` (con headers)
-
-### Test 5: Scanner Detection ✅
+### Scanner Detection
 
 ```bash
-# Regla custom 900007
-curl -s -o /dev/null -w "%{http_code}\n" -A "nikto/2.1.6" http://$WAF_IP/
 curl -s -o /dev/null -w "%{http_code}\n" -A "sqlmap/1.0" http://$WAF_IP/
-# O ver respuesta completa:
-curl -i -A "nikto/2.1.6" http://$WAF_IP/
+# Esperado: 403
 ```
 
-**Esperado:** `403` (solo código HTTP) o `403 Forbidden` (con headers) para ambos
-
-### Test 6: Admin Panel Restriction ✅
+### Admin Panel Restriction
 
 ```bash
-# Regla custom 900001 - Solo red interna
 curl -s -o /dev/null -w "%{http_code}\n" http://$WAF_IP/admin
-# O ver respuesta completa:
-curl -i http://$WAF_IP/admin
+# Esperado: 403 (desde IP externa)
+# Permitido: Solo 10.0.1.0/24
 ```
 
-**Esperado:** `403` (solo código HTTP) o `403 Forbidden` (con headers) desde IP externa
-**Permitido:** Solo desde 10.0.1.0/24
-
-### Test 7: Kong Rate Limiting
+### Kong Rate Limiting
 
 ```bash
-# 25 requests a /api/telemetria (límite: 20/min)
 for i in {1..25}; do
     echo -n "Request $i: "
     curl -s -o /dev/null -w "%{http_code}\n" http://$WAF_IP/api/telemetria
 done
+# Esperado: Primeros 20 = 200, siguientes = 429
 ```
-
-**Esperado:** Primeros 20 = `200`, siguientes = `429 Too Many Requests`
-
-**Nota:** Si ves el contenido completo de httpbin en vez de solo códigos HTTP, usa `-s -o /dev/null -w "%{http_code}\n"` para ver solo el código de estado.
 
 ---
 
 ## 📊 Integración WAF → SIEM
 
-### Logs monitoreados por Wazuh
-
+**Logs monitoreados por Wazuh:**
 - `/var/log/nginx/error.log` - Eventos ModSecurity
 - `/var/log/nginx/access.log` - Requests HTTP
 - `/var/log/kong/error.log` - Errores Kong
 
-### Reglas Wazuh Custom
+**Reglas Wazuh custom:**
 
-| Rule ID | Descripción | Trigger |
-|---------|-------------|---------|
-| **31333** | ModSecurity: Access denied with code 403 | Base rule (todos los bloqu eos) |
-| **100010** | SQL Injection detected | Patterns: `sql`, `union`, `select`, `%27%20OR` |
-| **100011** | XSS detected | Patterns: `script`, `onerror`, `alert` |
-| **100012** | RCE detected | Patterns: `exec`, `eval`, `system` |
-| **100013** | Path Traversal detected | Patterns: `..%2F`, `etc%2Fpasswd`, `passwd` |
-| **100014** | Scanner detected | Patterns: `nikto`, `sqlmap`, `nmap` |
+| Rule | Descripción | Patterns |
+|------|-------------|----------|
+| 31333 | ModSecurity access denied 403 | Base (todos los bloqueos) |
+| 100010 | SQL Injection detected | `sql`, `union`, `%27%20OR` |
+| 100011 | XSS detected | `script`, `onerror`, `alert` |
+| 100012 | RCE detected | `exec`, `eval`, `system` |
+| 100013 | Path Traversal detected | `..%2F`, `passwd` |
+| 100014 | Scanner detected | `nikto`, `sqlmap`, `nmap` |
 
 **Verificar en Wazuh Dashboard:**
 - Filtro: `rule.id: (31333 OR 100010 OR 100011 OR 100013)`
-- Esperado: Eventos en tiempo real de ataques bloqueados
+- Esperado: Eventos en tiempo real
 
 ---
 
-## 📁 Archivos de Configuración
-
-### Kong Gateway
+## 📁 Archivos Clave
 
 ```bash
-# Config principal
-/etc/kong/kong.conf
+# Kong
+/etc/kong/kong.conf                      # Config principal
+/var/log/kong/access.log                 # Logs
 
-# Database
-PostgreSQL en localhost:5432 (DB: kong)
+# ModSecurity + OWASP CRS
+/etc/nginx/modsec/modsecurity.conf       # ModSecurity config
+/opt/coreruleset/rules/                  # OWASP CRS rules
+/opt/coreruleset/rules/REQUEST-900-CUSTOM-RULES.conf  # Custom rules
 
-# Logs
-/var/log/kong/access.log
-/var/log/kong/error.log
-
-# Endpoints
-http://10.0.1.10:8000 (Proxy - interno)
-http://<PUBLIC_IP>:8000 (Proxy - público)
-http://<PUBLIC_IP>:8001 (Admin API - JSON REST)
-http://<PUBLIC_IP>:8002 (Admin GUI - Interfaz Web)
-http://<PUBLIC_IP>:80   (WAF ModSecurity - público)
+# Nginx
+/etc/nginx/nginx.conf                    # Config principal
+/var/log/nginx/error.log                 # ModSecurity events
+/var/log/nginx/modsec_audit.log          # Audit log
 ```
 
-**Acceso desde navegador:**
-- **Kong Admin GUI:** `http://<WAF_IP>:8002` - Interfaz gráfica para gestión
-- **Kong Admin API:** `http://<WAF_IP>:8001` - API REST (JSON)
-- **Kong Proxy:** `http://<WAF_IP>:8000` - Gateway público
-- **WAF:** `http://<WAF_IP>` - Nginx + ModSecurity (puerto 80)
-
-### ModSecurity + OWASP CRS
-
-```bash
-# ModSecurity config
-/etc/nginx/modsec/modsecurity.conf
-
-# OWASP CRS
-/opt/coreruleset/
-/opt/coreruleset/rules/REQUEST-900-CUSTOM-RULES.conf
-
-# Reglas deshabilitadas
-/opt/coreruleset/rules/REQUEST-922-MULTIPART-ATTACK.conf.disabled
+**Endpoints:**
 ```
-
-### Nginx
-
-```bash
-# Config principal
-/etc/nginx/nginx.conf
-
-# Site config
-/etc/nginx/sites-available/default
-
-# Logs
-/var/log/nginx/access.log
-/var/log/nginx/error.log
-/var/log/nginx/modsec_audit.log
+http://<WAF_IP>:80    - WAF ModSecurity (público)
+http://<WAF_IP>:8000  - Kong Proxy (público)
+http://<WAF_IP>:8001  - Kong Admin API (JSON REST)
+http://<WAF_IP>:8002  - Kong Admin GUI (web)
 ```
 
 ---
 
 ## 🔧 Comandos Útiles
 
-### Verificar servicios
-
 ```bash
-sudo systemctl status kong
-sudo systemctl status nginx
-sudo systemctl status wazuh-agent
-```
+# Verificar servicios
+sudo systemctl status kong nginx wazuh-agent
 
-### Ver logs en tiempo real
-
-```bash
-# ModSecurity blocks
+# Ver logs en tiempo real
 sudo tail -f /var/log/nginx/error.log | grep ModSecurity
-
-# Kong access log
 sudo tail -f /var/log/kong/access.log
 
-# Audit log ModSecurity
-sudo tail -f /var/log/nginx/modsec_audit.log
-```
-
-### Kong Admin API
-
-```bash
-# Listar servicios
-curl http://10.0.1.10:8001/services
-
-# Listar rutas
-curl http://10.0.1.10:8001/routes
-
-# Verificar plugins
-curl http://10.0.1.10:8001/plugins
-```
-
-### Testing ModSecurity
-
-```bash
-# Test regla OWASP CRS (SQL Injection)
-curl "http://<WAF_IP>/?id=' OR 1=1--"
-
-# Test regla custom (admin panel)
-curl "http://<WAF_IP>/admin"
-
-# Ver respuesta completa
-curl -v "http://<WAF_IP>/?id=1' OR '1'='1"
+# Kong Admin API
+curl http://10.0.1.10:8001/services  # Listar servicios
+curl http://10.0.1.10:8001/routes    # Listar rutas
+curl http://10.0.1.10:8001/plugins   # Listar plugins
 ```
 
 ---
 
-## 🎯 Casos de Uso Implementados
-
-### Caso de Uso 2: WAF → SIEM Integration
-
-**Objetivo:** Detectar y alertar ataques web en tiempo real
+## 🎯 Caso de Uso 2: WAF → SIEM
 
 **Flujo:**
 1. Atacante intenta SQL Injection: `/?id=1' OR '1'='1`
-2. ModSecurity bloquea con 403
-3. Log generado en `/var/log/nginx/error.log`
-4. Wazuh agent lee log
-5. Rule 31333 (base) + Rule 100010 (custom) disparan
-6. Alerta visible en Wazuh Dashboard
+2. ModSecurity bloquea → 403 Forbidden
+3. Log en `/var/log/nginx/error.log`
+4. Wazuh agent envía evento
+5. Rules 31333 + 100010 disparan
+6. Alerta en Wazuh Dashboard
 
-**Testing:** Ver [README principal](../README.md#caso-2-waf--siem-integration-rules-100010-100014)
-
-**Status:** ✅ 100% funcional - Testeado con 4 tipos de ataque
+**Status:** ✅ 100% funcional (testeado 2025-11-21)
 
 ---
 
