@@ -191,7 +191,12 @@ create_user() {
         --rolename $role \
         2>/dev/null || echo "    ℹ️  Rol ya asignado"
 
-    echo "    [OK] Usuario $username creado/actualizado"
+    # Forzar configuración OTP en primer login
+    sudo -u keycloak $KC_CLI update users/$USER_ID -r $REALM \
+        -s 'requiredActions=["CONFIGURE_TOTP"]' \
+        2>/dev/null || echo "    ℹ️  Required action CONFIGURE_TOTP ya configurado"
+
+    echo "    [OK] Usuario $username creado/actualizado (OTP requerido en primer login)"
 }
 
 # Usuario 1: Administrador de Infraestructura
@@ -266,6 +271,20 @@ if [ -n "$CLIENT_ID" ] && [ "$CLIENT_ID" != "null" ]; then
     2>/dev/null || echo "ℹ️  Mapper 'roles' ya existe"
   echo "[OK] Mapper de roles configurado"
 fi
+
+# Habilitar Direct Access Grants en cliente 'account' (para VPN MFA)
+echo "[+] Habilitando Direct Access Grants en cliente 'account'..."
+ACCOUNT_CLIENT_ID=$(sudo -u keycloak $KC_CLI get clients -r $REALM -q clientId=account 2>/dev/null | jq -r '.[0].id')
+
+if [ -n "$ACCOUNT_CLIENT_ID" ] && [ "$ACCOUNT_CLIENT_ID" != "null" ]; then
+  sudo -u keycloak $KC_CLI update clients/$ACCOUNT_CLIENT_ID -r $REALM \
+    -s directAccessGrantsEnabled=true \
+    2>/dev/null || echo "ℹ️  Direct Access Grants ya habilitado en 'account'"
+  echo "[OK] Cliente 'account' configurado para MFA VPN"
+else
+  echo "[WARN] Cliente 'account' no encontrado"
+fi
+
 echo ""
 
 # Resumen final

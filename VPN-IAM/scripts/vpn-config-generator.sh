@@ -36,7 +36,7 @@ echo ""
 echo "🔐 Autenticación MFA requerida"
 echo ""
 
-echo -n "Password: "
+echo -n "Password de Keycloak: "
 read -rs USER_PASSWORD
 echo ""
 
@@ -45,9 +45,14 @@ if [ -z "$USER_PASSWORD" ]; then
     exit 1
 fi
 
-echo -n "OTP Code (Enter para omitir si no está habilitado): "
+echo -n "OTP Code (6 dígitos de Google Authenticator): "
 read -r OTP_CODE
 echo ""
+
+if [ -z "$OTP_CODE" ]; then
+    echo "❌ ERROR: OTP Code requerido para MFA"
+    exit 1
+fi
 
 # Autenticar usuario con Keycloak (password + OTP si está configurado)
 echo "[+] Validando credenciales..."
