@@ -359,29 +359,56 @@ Keycloak genera eventos de autenticación que Wazuh procesa con reglas custom:
 
 ### Multi-Factor Authentication (MFA)
 
-**Implementación actual:** Autenticación basada en criptografía de clave pública
+**Implementación:** MFA de doble capa (TOTP + Criptografía)
 
-**¿Por qué NO se usa TOTP/OTP tradicional?**
+El sistema implementa **autenticación multi-factor completa** en dos niveles:
 
-WireGuard implementa **autenticación multi-factor implícita** superior a TOTP:
+#### Capa 1: MFA en Provisioning (Keycloak TOTP)
+
+Antes de generar la configuración VPN, el usuario debe autenticarse con:
+
+| Factor | Implementación | Propósito |
+|--------|----------------|-----------|
+| **Conocimiento** | Password de Keycloak | Verifica identidad del usuario |
+| **Posesión** | OTP de Google Authenticator | Segundo factor temporal (6 dígitos) |
+
+**Flujo de provisioning:**
+```bash
+# Ejecutar en VPN VM
+cd /opt/fosil/VPN-IAM/scripts
+sudo bash vpn-config-generator.sh jperez@fosil.uy
+
+# El script solicita:
+# 1. Password de Keycloak: Admin123!
+# 2. OTP Code (6 dígitos): [código desde Google Authenticator]
+```
+
+**Características:**
+- ✅ OTP **obligatorio** - No permite omitir segundo factor
+- ✅ Usuarios forzados a configurar OTP en primer login (`requiredActions=["CONFIGURE_TOTP"]`)
+- ✅ Validación Keycloak antes de generar configuración VPN
+- ✅ Integración con Keycloak IAM para lectura de roles
+
+#### Capa 2: MFA en Conexión (WireGuard Cryptographic)
+
+Una vez provisionado, la conexión VPN usa autenticación criptográfica:
 
 | Factor | Implementación | Seguridad |
 |--------|----------------|-----------|
 | **Posesión** | Clave privada única por usuario | ✅ Curve25519 (256-bit) |
 | **Conocimiento** | Archivo .conf protegido | ✅ Solo usuario autorizado |
-| **Inherencia** | IP/Device fingerprinting (opcional) | ⚠️ No implementado |
 
-**Ventajas sobre TOTP tradicional:**
-- ✅ **Imposible de hacer phishing** - No hay código de 6 dígitos que robar
-- ✅ **No depende de smartphone** - Más robusto que app móvil
+**Ventajas capa criptográfica:**
+- ✅ **Imposible de hacer phishing** - No hay código de 6 dígitos en la conexión
 - ✅ **Perfect Forward Secrecy** - Compromiso de clave no compromete sesiones pasadas
 - ✅ **Zero Trust por defecto** - Políticas granulares (AllowedIPs) por identidad
+- ✅ **Session hijacking prevention** - Túnel encriptado ChaCha20-Poly1305
 
-**Protección contra ataques actuales:**
-- ✅ **Credential stuffing:** No hay usuario/password
-- ✅ **Brute force:** Criptografía asimétrica previene ataques
+**Protección contra ataques:**
+- ✅ **Credential stuffing:** Password + OTP en provisioning
+- ✅ **Brute force:** Criptografía asimétrica + rate limiting Keycloak
 - ✅ **MitM:** Handshake criptográfico Noise Protocol
-- ✅ **Session hijacking:** Túnel encriptado ChaCha20-Poly1305
+- ✅ **Config theft:** Archivo .conf inútil sin conocer AllowedIPs específicos del rol
 
 ### Políticas Granulares por Identidad
 

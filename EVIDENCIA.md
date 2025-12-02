@@ -418,6 +418,85 @@ sudo ipsec status
 - IKEv2 con AES_CBC_256/HMAC_SHA2_256_128
 - Estado: ESTABLISHED
 
+### 7.5 Multi-Factor Authentication (MFA) - TOTP
+
+**Implementación:** MFA de doble capa en VPN Remote Access
+
+#### Configuración Automática de OTP
+
+**Los usuarios se crean con `requiredActions=["CONFIGURE_TOTP"]`**, forzando configuración de OTP en primer login.
+
+**Captura 1:** Usuario jperez con Required Actions "Configure OTP" en Keycloak
+
+![Keycloak User Required Actions](evidencia/29a-keycloak-required-actions.png)
+
+**Verificación en UI:**
+- Admin Console → Realm "fosil" → Users → jperez → Required Actions
+- Esperado: "Configure OTP" checked
+
+#### Primer Login - Configuración de TOTP
+
+**Login inicial en Grafana fuerza configuración de OTP:**
+
+**Captura 2:** Pantalla Keycloak "Configure OTP" con QR code
+
+![Keycloak OTP Setup QR](evidencia/29b-keycloak-otp-qr.png)
+
+**Pasos del usuario:**
+1. Escanear QR code con Google Authenticator
+2. Ingresar código de 6 dígitos para verificar
+3. OTP configurado exitosamente
+
+**Captura 3:** Google Authenticator mostrando token "jperez@fosil.uy"
+
+![Google Authenticator Token](evidencia/29c-google-auth-token.png)
+
+#### MFA en Provisioning VPN
+
+**Script `vpn-config-generator.sh` requiere autenticación MFA antes de generar config:**
+
+**Captura 4:** Script solicitando Password de Keycloak + OTP Code
+
+```bash
+ssh ubuntu@<VPN_IP>
+cd /opt/fosil/VPN-IAM/scripts
+sudo bash vpn-config-generator.sh jperez@fosil.uy
+```
+
+![VPN Script MFA Prompt](evidencia/29d-vpn-mfa-prompt.png)
+
+**Validación:**
+- Password de Keycloak: `Admin123!`
+- OTP Code (6 dígitos): `[código desde Google Authenticator]`
+- Si OTP incorrecto o vacío → `❌ ERROR: OTP Code requerido para MFA`
+
+**Captura 5:** Autenticación MFA exitosa y generación de config VPN
+
+![VPN MFA Success](evidencia/29e-vpn-mfa-success.png)
+
+**Output esperado:**
+```
+✅ Autenticación exitosa: jperez@fosil.uy
+✅ Rol asignado: infraestructura-admin
+✅ Config VPN generada exitosamente
+🔐 MFA validado: Password + OTP
+```
+
+#### Verificación Técnica
+
+**Cliente Keycloak "account" con Direct Access Grants habilitado:**
+
+**Captura 6:** Cliente "account" configurado en Keycloak
+
+![Keycloak Account Client](evidencia/29f-keycloak-account-client.png)
+
+**Verificación en UI:**
+- Admin Console → Realm "fosil" → Clients → "account"
+- Settings → Direct access grants enabled: **ON**
+- Permite autenticación programática con `totp` parameter
+
+**Configuración automática:** El script `create-realm.sh` habilita esto durante deployment.
+
 ---
 
 ## 8. Resumen de Cumplimiento
@@ -428,6 +507,7 @@ sudo ipsec status
 |-----------|-----------|------------|
 | **1a) VPN Site-to-Site** | Túnel IPSec ESTABLISHED ambas puntas | 28a-28e |
 | **1b) VPN Remote Access + IAM** | WireGuard + políticas granulares + conectividad | 25, 26, 27a-27b |
+| **1c) MFA en VPN** | TOTP (Password + OTP) en provisioning VPN | 29a-29f |
 | **2a) API Gateway** | Kong Dashboard servicios activos | 08 |
 | **2b) WAF OWASP Top 10** | ModSecurity bloqueando ataques | 05, 09 |
 | **2c) 2+ Reglas Custom WAF** | 6 reglas custom funcionando | 03 (100010-100014) |
@@ -437,10 +517,11 @@ sudo ipsec status
 | **3c) Reglas Custom SIEM** | 17 reglas custom cargadas | 03 |
 | **4a) IAM OAuth2** | Keycloak + Grafana OAuth funcionando | 11-18 |
 | **4b) Analítica Comportamental** | Reglas 100040-100043 (IAM Analytics) | 03 |
+| **4c) MFA en IAM** | TOTP forzado en usuarios (requiredActions) | 29a-29c |
 | **5a) Scripts Hardening** | Script CIS aplicado | 20 |
 | **5b) CIS Benchmark** | SCA 45% → 57% (+12%) | 19, 21 |
 | **5c) Firewall + Audit + SSH + SIEM** | UFW + auditd + fail2ban + Wazuh | 22-24 |
 
-**Estado:** ✅ Todos los requisitos cumplidos y verificados
+**Estado:** ✅ Todos los requisitos cumplidos y verificados (incluido MFA TOTP)
 
 ---
