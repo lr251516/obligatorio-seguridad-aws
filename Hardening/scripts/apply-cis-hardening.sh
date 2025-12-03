@@ -45,10 +45,7 @@ ufw allow from 10.0.1.20 to any port 1515 proto tcp comment 'Wazuh agent TCP'
 # Logging
 ufw logging medium
 
-# Activar
-echo "y" | ufw enable || ufw --force enable
-
-echo "[OK] Firewall UFW configurado y activo"
+echo "[OK] Reglas UFW configuradas (se activará después de configurar SSH)"
 
 # ============================================
 # 2. AUDITORÍA DEL SISTEMA (auditd)
@@ -169,14 +166,14 @@ EOF
 
 cp /etc/issue.net /etc/issue
 
-# Restart SSH
-systemctl restart sshd
-sleep 2
-
 echo "[OK] SSH configurado en puerto 2222"
 
+echo "[3.2] Activando UFW después de configurar SSH..."
+echo "y" | ufw enable || ufw --force enable
+echo "[OK] UFW activado"
+
 # --- Fail2ban ---
-echo "[3.2] Instalando fail2ban..."
+echo "[3.3] Instalando fail2ban..."
 
 apt-get install -y fail2ban
 
@@ -200,7 +197,7 @@ systemctl start fail2ban
 echo "[OK] fail2ban configurado"
 
 # --- Password policies (básico) ---
-echo "[3.3] Configurando políticas de contraseñas..."
+echo "[3.4] Configurando políticas de contraseñas..."
 
 apt-get install -y libpam-pwquality
 
@@ -261,7 +258,8 @@ echo "  - Logs en: $LOG_FILE"
 echo ""
 echo "======================================"
 echo ""
-echo "Reiniciando sistema en 5 segundos..."
+echo "Reiniciando sistema en 30 segundos..."
 echo "Wazuh ejecutará nuevo scan SCA después del reboot"
-sleep 5
+echo ""
+sleep 30
 systemctl reboot
