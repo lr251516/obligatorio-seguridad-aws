@@ -6,16 +6,14 @@
   <timeout_allowed>yes</timeout_allowed>
 </command>
 
-<!-- Rule 100002: SSH Brute Force externo → Bloqueo 10 min -->
 <active-response>
   <disabled>no</disabled>
   <command>firewall-drop</command>
   <location>local</location>
-  <rules_id>100002</rules_id>
+  <rules_id>100004</rules_id>
   <timeout>600</timeout>
 </active-response>
 
-<!-- Rule 100014: Múltiples ataques web → Bloqueo 30 min -->
 <active-response>
   <disabled>no</disabled>
   <command>firewall-drop</command>

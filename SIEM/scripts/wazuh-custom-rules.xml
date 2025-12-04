@@ -26,11 +26,20 @@
     <group>authentication_failures,</group>
   </rule>
 
-  <!-- Alerta crítica desde IP externa -->
   <rule id="100002" level="12">
-    <if_sid>100001,100004</if_sid>
+    <if_matched_sid>100001</if_matched_sid>
     <srcip>!10.0.1.0/24</srcip>
-    <description>Wazuh: Brute force SSH desde IP externa (fuera de VPC)</description>
+    <description>Wazuh: Brute force SSH desde IP externa</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>authentication_failures,attacks,</group>
+  </rule>
+
+  <rule id="100005" level="12">
+    <if_matched_sid>100004</if_matched_sid>
+    <srcip>!10.0.1.0/24</srcip>
+    <description>Wazuh: Brute force SSH desde IP externa (usuarios inexistentes)</description>
     <mitre>
       <id>T1110</id>
     </mitre>
