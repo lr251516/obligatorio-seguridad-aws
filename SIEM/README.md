@@ -267,11 +267,14 @@ ssh -i ~/.ssh/obligatorio-srd ubuntu@$WAZUH_IP "sudo awk '/Rule: 651/,/^$/' /var
 **Verificar bloqueo real (iptables en WAF):**
 
 ```bash
-# Conectar a WAF VM (requiere IP diferente o esperar timeout)
-ssh ubuntu@$WAZUH_IP
-ssh ubuntu@10.0.1.10  # WAF VM
+# 1. Copiar clave SSH a Wazuh VM (solo primera vez)
+scp -i ~/.ssh/obligatorio-srd ~/.ssh/obligatorio-srd ubuntu@$WAZUH_IP:~/.ssh/id_rsa
 
-# Ver reglas iptables activas
+# 2. Conectar a Wazuh y luego a WAF VM
+ssh -i ~/.ssh/obligatorio-srd ubuntu@$WAZUH_IP
+ssh -i ~/.ssh/id_rsa ubuntu@10.0.1.10  # WAF VM
+
+# 3. Ver reglas iptables activas
 sudo iptables -L INPUT -v -n | grep -A2 "Chain INPUT"
 ```
 
