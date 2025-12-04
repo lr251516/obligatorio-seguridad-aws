@@ -1,0 +1,25 @@
+<!-- Active Response - Bloqueo automático de IPs -->
+
+<command>
+  <name>firewall-drop</name>
+  <executable>firewall-drop</executable>
+  <timeout_allowed>yes</timeout_allowed>
+</command>
+
+<!-- Rule 100002: SSH Brute Force externo → Bloqueo 10 min -->
+<active-response>
+  <disabled>no</disabled>
+  <command>firewall-drop</command>
+  <location>local</location>
+  <rules_id>100002</rules_id>
+  <timeout>600</timeout>
+</active-response>
+
+<!-- Rule 100014: Múltiples ataques web → Bloqueo 30 min -->
+<active-response>
+  <disabled>no</disabled>
+  <command>firewall-drop</command>
+  <location>local</location>
+  <rules_id>100014</rules_id>
+  <timeout>1800</timeout>
+</active-response>

@@ -268,8 +268,12 @@ cat > /var/ossec/etc/rules/local_rules.xml.backup-heredoc <<'RULES'
 RULES
 # FIN backup HEREDOC viejo (no se usa, solo referencia)
 
-# Reiniciar Wazuh Manager para aplicar reglas desde repo
-echo "[$(date)] Reiniciando Wazuh Manager para aplicar reglas desde repo..." >> /tmp/user-data.log
+# Aplicar Active Response
+echo "[$(date)] Aplicando Active Response..." >> /tmp/user-data.log
+sed -i '/<\/ossec_config>/r /opt/fosil/SIEM/scripts/wazuh-active-response.xml' /var/ossec/etc/ossec.conf
+
+# Reiniciar Wazuh Manager para aplicar reglas y Active Response
+echo "[$(date)] Reiniciando Wazuh Manager..." >> /tmp/user-data.log
 systemctl restart wazuh-manager
 
 # Permisos del repositorio (ya clonado arriba)
@@ -277,5 +281,6 @@ chown -R ubuntu:ubuntu /opt/fosil
 
 echo "Wazuh SIEM instalado - Password en /root/wazuh-password.txt" > /tmp/user-data-completed.log
 echo "Reglas personalizadas aplicadas en /var/ossec/etc/rules/local_rules.xml" >> /tmp/user-data-completed.log
+echo "Active Response configurado (Rules 100002, 100014)" >> /tmp/user-data-completed.log
 echo "Repositorio clonado en /opt/fosil" >> /tmp/user-data-completed.log
 date >> /tmp/user-data-completed.log
