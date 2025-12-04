@@ -114,8 +114,13 @@ fi
 
 # Aplicar Active Response
 echo "[$(date)] Aplicando Active Response..." >> /tmp/user-data.log
-sed -i '$d' /var/ossec/etc/ossec.conf  # Quita </ossec_config>
+if grep -q '</ossec_config>' /var/ossec/etc/ossec.conf; then
+  # Eliminar solo la ÚLTIMA línea </ossec_config>
+  tac /var/ossec/etc/ossec.conf | sed '0,/<\/ossec_config>/d' | tac > /tmp/ossec.conf.tmp
+  mv /tmp/ossec.conf.tmp /var/ossec/etc/ossec.conf
+fi
 cat /opt/fosil/SIEM/scripts/wazuh-active-response.xml >> /var/ossec/etc/ossec.conf
+echo "" >> /var/ossec/etc/ossec.conf
 echo "</ossec_config>" >> /var/ossec/etc/ossec.conf
 
 # Reiniciar Wazuh Manager para aplicar reglas y Active Response
