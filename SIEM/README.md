@@ -187,6 +187,116 @@ sudo echo "test:x:9999:9999::/tmp:/bin/false" >> /etc/passwd
 
 ---
 
+## ⚡ Active Response
+
+**Bloqueo automático de IPs atacantes usando `firewall-drop` (iptables).**
+
+**Configuración:** 2 Active Response implementados
+
+| Rule | Descripción | Timeout | Command |
+|------|-------------|---------|---------|
+| 100004 | SSH Brute Force | 10 min | firewall-drop |
+| 100014 | WAF Múltiples Ataques | 30 min | firewall-drop |
+
+**Testing:**
+
+```bash
+# Variables
+export WAZUH_IP=$(terraform output -raw wazuh_public_ip)
+export HARDENING_IP=$(terraform output -raw hardening_public_ip)
+export WAF_IP=$(terraform output -raw waf_public_ip)
+
+# 1. SSH Brute Force → Bloqueo 10 min
+for i in {1..4}; do ssh fake_user@$HARDENING_IP; sleep 3; done
+```
+
+**Resultado esperado SSH:**
+```
+fake_user@54.245.216.205: Permission denied (publickey).  # Intento 1
+fake_user@54.245.216.205: Permission denied (publickey).  # Intento 2
+fake_user@54.245.216.205: Permission denied (publickey).  # Intento 3
+ssh: connect to host 54.245.216.205 port 22: Network is unreachable  # Intento 4 - BLOQUEADO ✅
+```
+
+```bash
+# 2. WAF Attacks → Bloqueo 30 min
+for i in {1..12}; do curl "http://$WAF_IP/?id=1%27%20OR%20%271%27%3D%271"; sleep 2; done
+```
+
+**Resultado esperado WAF:**
+```html
+<!-- Primeros 9 requests: ModSecurity bloqueando -->
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<center><h1>403 Forbidden</h1></center>
+<hr><center>nginx/1.24.0</center>
+</body>
+</html>
+
+<!-- Requests 10-12: Active Response bloqueó IP -->
+curl: (7) Failed to connect to 52.36.140.170 port 80 after 21240 ms: Couldn't connect to server  # BLOQUEADO ✅
+```
+
+```bash
+# 3. Confirmar bloqueo WAF (curl simple debe fallar)
+curl "http://$WAF_IP/"
+# Esperado: curl: (7) Failed to connect... (IP bloqueada)
+```
+
+**Verificar bloqueo ejecutado (Rule 651):**
+
+```bash
+ssh -i ~/.ssh/obligatorio-srd ubuntu@$WAZUH_IP 'sudo grep "Rule: 651" /var/ossec/logs/alerts/alerts.log | tail -5'
+```
+
+**Resultado esperado:**
+```
+Rule: 651 (level 3) -> 'Host Blocked by firewall-drop Active Response'
+Rule: 651 (level 3) -> 'Host Blocked by firewall-drop Active Response'
+```
+→ 2 alertas: una por SSH (Rule 100004), otra por WAF (Rule 100014)
+
+**Ver detalles completos con IP bloqueada:**
+```bash
+ssh -i ~/.ssh/obligatorio-srd ubuntu@$WAZUH_IP "sudo awk '/Rule: 651/,/^$/' /var/ossec/logs/alerts/alerts.log | grep -E '(Src IP:|parameters.alert.rule.id:|parameters.alert.agent.name:)' | head -10"
+```
+
+**Dashboard:** Threat Hunting → Events → Filtrar `rule.id: 651`
+
+**Verificar bloqueo real (iptables en WAF):**
+
+```bash
+# Conectar a WAF VM (requiere IP diferente o esperar timeout)
+ssh ubuntu@$WAZUH_IP
+ssh ubuntu@10.0.1.10  # WAF VM
+
+# Ver reglas iptables activas
+sudo iptables -L INPUT -v -n | grep -A2 "Chain INPUT"
+```
+
+**Resultado esperado:**
+```
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination
+   47  2724 DROP       all  --  *      *       104.30.133.214       0.0.0.0/0
+```
+→ Tu IP bloqueada con contador de paquetes descartados
+
+**Comportamiento esperado:**
+- **Conexión bloqueada**: SSH/curl dan `Network is unreachable` o timeout después de ~20 seg (iptables DROP = sin respuesta)
+- **Tiempo de aplicación**: 5-15 segundos después de disparar la regla
+- **Auto-eliminación**: Regla se elimina automáticamente después del timeout (10 min SSH, 30 min WAF)
+- **Evidencia**: IP aparece en `iptables -L INPUT` mientras está bloqueada
+
+**Evidencia de testing (2025-12-04):**
+- ✅ Rule 100004 (SSH): Bloqueó IP después de 3 intentos fallidos
+- ✅ Rule 100014 (WAF): Bloqueó IP después de 10 ataques SQL Injection
+- ✅ Rule 651 disparó 2 veces (confirmación de ejecución)
+- ✅ iptables con 47 paquetes bloqueados en WAF VM
+
+---
+
 ## 📁 Archivos Clave
 
 ```bash
